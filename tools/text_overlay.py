@@ -39,7 +39,7 @@ reloc = next(s for s in pe.sections if s.Name.startswith(b'.reloc'))
 raw_lo = B + reloc.VirtualAddress
 raw_hi = raw_lo + reloc.SizeOfRawData
 used = max(i for i in range(off(raw_lo), off(raw_hi)) if data[i]) - off(raw_lo) + raw_lo
-CODE = (used + 32) & ~15
+CODE = (used + 17) & ~15                           # past the NUL ending the previous code's strings
 DATA = raw_hi + 0x29000                            # after smooth60.py's data
 (G_OVL, G_OVL_W, G_OVL_H, G_OVL_DD, G_HOOKED, G_GETDC, G_RELDC, G_DC_OUT, G_DIRTY, G_OLDPROT,
  G_SETBOUNDS, G_GETBOUNDS, G_HDC) = (DATA + 4 * i for i in range(13))
