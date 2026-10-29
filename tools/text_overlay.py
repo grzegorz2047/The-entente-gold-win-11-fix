@@ -173,6 +173,12 @@ hook_getdc:
     cmp eax, 0x4f85f9                     ; selection panel
     je gd_site
     cmp eax, 0x4fc07e                     ; selection panel
+    je gd_site
+    cmp eax, 0x4fbb48                     ; label of a panel control (one GetDC per label, e.g. market)
+    je gd_site
+    cmp eax, 0x500487                     ; panel control text
+    je gd_site
+    cmp eax, 0x4c6db0                     ; panel control text
     jne gd_pass
 gd_site:
     mov eax, dword ptr [esp + 4]
