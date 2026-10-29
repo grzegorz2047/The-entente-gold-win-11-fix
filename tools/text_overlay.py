@@ -7,9 +7,12 @@ back buffer, several times per frame. Under a DirectDraw wrapper every such GetD
 and copies the frame back to system memory.
 
 - The GetDC / ReleaseDC entries of the surface vtable are hooked (once, on the first map frame).
-  For the back buffer [0x5ae258] in the plain map view, the DC of a system-memory surface of the
-  same size ("overlay", cleared to colour key 0x0001) is handed out instead, with GDI bounds
-  accumulation switched on. Other surfaces and other screens pass straight through.
+  For the back buffer [0x5ae258] in the plain map view, at the call sites used in every frame of
+  normal play, which draw light text on dark ground or only measure text (resource bar, minimap,
+  text queue, selection panel), the DC of a system-memory surface
+  of the same size ("overlay", cleared to colour key 0x0001) is handed out instead, with GDI bounds
+  accumulation switched on. Other call sites, surfaces and screens pass straight through: with a
+  colour key, anti-aliased edges of dark text (e.g. the tips window) blend into a dark rim.
 - On ReleaseDC the area GDI touched (GetBoundsRect) is added to a dirty rectangle.
 - Right before the map frame is presented (0x42b8ce) only the dirty rectangle of the overlay is
   blitted onto the back buffer with the source colour key (an upload, no read-back) and cleared.
@@ -158,6 +161,20 @@ eh_ret:
     ret
 
 hook_getdc:
+    mov eax, dword ptr [esp]              ; call site
+    cmp eax, 0x444e39                     ; resource bar
+    je gd_site
+    cmp eax, 0x43f027                     ; minimap
+    je gd_site
+    cmp eax, 0x4fe2a6                     ; text queue (messages, tooltips)
+    je gd_site
+    cmp eax, 0x4fdd57                     ; text measuring when a text is queued
+    je gd_site
+    cmp eax, 0x4f85f9                     ; selection panel
+    je gd_site
+    cmp eax, 0x4fc07e                     ; selection panel
+    jne gd_pass
+gd_site:
     mov eax, dword ptr [esp + 4]
     cmp eax, dword ptr [{BB:#x}]
     jne gd_pass

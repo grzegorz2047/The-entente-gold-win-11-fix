@@ -48,9 +48,13 @@ TABLE = DATA + 0x100
 R_TICK = TABLE + N * ENTRY                                     # tooltip replay: tick, count, entries
 R_N = R_TICK + 4
 R_ENT = R_TICK + 16
-R_MAX, R_CHARS = 4, 256
-R_ESZ = 20 + 2 * R_CHARS                                       # x, y, arg3, colour, arg5, text
-DATA_SIZE = R_ENT + R_MAX * R_ESZ - DATA
+R_MAX, R_CHARS = 8, 128
+R_ESZ = 24 + 2 * R_CHARS                                       # call site, x, y, arg3, colour, arg5, text
+ES_N = R_ENT + R_MAX * R_ESZ                                   # call sites seen in extra frames
+ES = ES_N + 4
+ES_MAX = 16
+DATA_SIZE = ES + 4 * ES_MAX - DATA
+assert DATA + DATA_SIZE <= 0xa0cc00, 'overlaps fps_counter.py data at 0xa0cc00'
 
 GetTickCount, Sleep, QPC, QPF = 0x9c88e4, 0x9c8848, 0x9c87e8, 0x9c87f8
 RENDER = 0x42b1d0
@@ -277,56 +281,80 @@ done_wait:
 plain_sleep:
     jmp dword ptr [{Sleep:#x}]
 
-; ---------------- button tooltip: replay in the extra frames ----------------
-; A button draws its tooltip (0x4f8aac / 0x4f8ad5, text method 0x4fdc90 on the text object 0x9a5e98,
-; thiscall, 6 args, ret 0x18) only when the hover message arrives, i.e. once per game tick. Record those
-; calls with a copy of the text and issue them again in the extra frames of the same tick, before the
-; queued texts are drawn (0x42b4dc).
-tip_record:
+; ---------------- texts drawn once per tick: replay in the extra frames ----------------
+; Texts are queued with the method 0x4fdc90 (thiscall on the text object 0x9a5e98, 6 args, ret 0x18;
+; every call goes through the thunk 0x40171c) and drawn by 0x4fe270 (called at 0x42b4dc). Most texts
+; are queued every frame, but button tooltips only when the hover message arrives, once per game
+; tick, so the extra frames lacked them. Every one-frame text (arg 4 = lifetime in frames = 1; the queue
+; 0x4fe270 drops an entry when its lifetime runs out) queued in the tick's own frame is recorded; call
+; sites also seen in extra frames are remembered as "every frame" and are not replayed, the rest is
+; queued again in the extra frames of the same tick, before the queue is drawn.
+text_hook:
     pushal
+    cmp dword ptr [esp + 24], 0x9a5e98  ; this (ecx)
+    jne th_done
+    mov edx, dword ptr [esp + 32]       ; call site
+    cmp dword ptr [{G_EXTRA:#x}], 0
+    je th_main
+    xor ecx, ecx                        ; extra frame: remember the call site
+th_find:
+    cmp ecx, dword ptr [{ES_N:#x}]
+    jae th_add
+    cmp dword ptr [ecx*4 + {ES:#x}], edx
+    je th_done
+    inc ecx
+    jmp th_find
+th_add:
+    cmp ecx, {ES_MAX}
+    jae th_done
+    mov dword ptr [ecx*4 + {ES:#x}], edx
+    inc dword ptr [{ES_N:#x}]
+    jmp th_done
+th_main:
+    cmp dword ptr [esp + 48], 1         ; lifetime in frames: only one-frame texts need a replay
+    jne th_done
     mov eax, dword ptr [{G_TICK:#x}]
     cmp eax, dword ptr [{R_TICK:#x}]
-    je tr_same
+    je th_same
     mov dword ptr [{R_TICK:#x}], eax
     mov dword ptr [{R_N:#x}], 0
-tr_same:
-    cmp dword ptr [{G_EXTRA:#x}], 0
-    jne tr_skip
+th_same:
     mov ebx, dword ptr [{R_N:#x}]
     cmp ebx, {R_MAX}
-    jae tr_skip
+    jae th_done
     imul edi, ebx, {R_ESZ}
     add edi, {R_ENT:#x}
+    mov dword ptr [edi], edx
     mov eax, dword ptr [esp + 36]
-    mov dword ptr [edi], eax
-    mov eax, dword ptr [esp + 40]
     mov dword ptr [edi + 4], eax
-    mov eax, dword ptr [esp + 48]
+    mov eax, dword ptr [esp + 40]
     mov dword ptr [edi + 8], eax
-    mov eax, dword ptr [esp + 52]
+    mov eax, dword ptr [esp + 48]
     mov dword ptr [edi + 12], eax
-    mov eax, dword ptr [esp + 56]
+    mov eax, dword ptr [esp + 52]
     mov dword ptr [edi + 16], eax
+    mov eax, dword ptr [esp + 56]
+    mov dword ptr [edi + 20], eax
     mov esi, dword ptr [esp + 44]
-    add edi, 20
+    add edi, 24
     mov ecx, {R_CHARS - 1}
-tr_copy:
+th_copy:
     mov ax, word ptr [esi]
     mov word ptr [edi], ax
     add esi, 2
     add edi, 2
     test ax, ax
-    je tr_done
+    je th_copied
     dec ecx
-    jnz tr_copy
+    jnz th_copy
     mov word ptr [edi], 0
-tr_done:
+th_copied:
     inc dword ptr [{R_N:#x}]
-tr_skip:
+th_done:
     popal
-    jmp 0x40171c
+    jmp 0x4fdc90
 
-tip_replay:
+text_replay:
     cmp dword ptr [{G_EXTRA:#x}], 0
     je rp_ret
     mov eax, dword ptr [{G_TICK:#x}]
@@ -339,15 +367,26 @@ rp_loop:
     jae rp_end
     imul esi, ebx, {R_ESZ}
     add esi, {R_ENT:#x}
+    mov edx, dword ptr [esi]
+    xor ecx, ecx
+rp_find:
+    cmp ecx, dword ptr [{ES_N:#x}]
+    jae rp_draw
+    cmp dword ptr [ecx*4 + {ES:#x}], edx
+    je rp_next
+    inc ecx
+    jmp rp_find
+rp_draw:
+    push dword ptr [esi + 20]
     push dword ptr [esi + 16]
     push dword ptr [esi + 12]
-    push dword ptr [esi + 8]
-    lea eax, [esi + 20]
+    lea eax, [esi + 24]
     push eax
+    push dword ptr [esi + 8]
     push dword ptr [esi + 4]
-    push dword ptr [esi]
     mov ecx, 0x9a5e98
-    call 0x40171c
+    call 0x4fdc90
+rp_next:
     inc ebx
     jmp rp_loop
 rp_end:
@@ -396,11 +435,9 @@ patch_branch(b'\xe9', 0x5187f0, label('unit_draw'), 1)
 expect(0x42b242, 'e81660fdff')                   # call 0x40125d (-> 0x4cd870)
 patch_branch(b'\xe8', 0x42b242, label('periodic_job'))
 expect(0x42b4dc, 'e8c07dfdff')                   # call 0x4032a1 (draws the queued texts)
-expect(0x4f8aac, 'e86b8cf0ff')                   # call 0x40171c (tooltip line 1)
-expect(0x4f8ad5, 'e8428cf0ff')                   # call 0x40171c (tooltip line 2)
-patch_branch(b'\xe8', 0x42b4dc, label('tip_replay'))
-patch_branch(b'\xe8', 0x4f8aac, label('tip_record'))
-patch_branch(b'\xe8', 0x4f8ad5, label('tip_record'))
+expect(0x40171c, 'e96fc50f00')                   # thunk: jmp 0x4fdc90 (queue a text)
+patch_branch(b'\xe8', 0x42b4dc, label('text_replay'))
+patch_branch(b'\xe9', 0x40171c, label('text_hook'))
 
 # .reloc: grow the virtual size for our data and make the section RWX, non-discardable
 hdr = reloc.get_file_offset()
