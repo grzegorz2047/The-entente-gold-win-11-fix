@@ -47,7 +47,11 @@ original `Antanta.exe` – just run `Install.cmd` again.
     which modern graphics drivers do not support; it is now cleared instead);
   - units move smoothly at up to 60 fps: the game logic keeps its original pace (one step per
     "game speed" milliseconds), and in the time the game used to sleep it shows extra frames with
-    units drawn between their positions.
+    units drawn between their positions;
+  - button tooltips (e.g. building costs) no longer flicker in those extra frames;
+  - HUD text is drawn on a separate layer, which keeps the frame rate steady;
+  - an FPS counter in the top-right corner ("FPS 60  max 33 ms": frames per second and the
+    longest frame of the last second).
 - Sharp picture with Windows display scaling (125 %, 150 %, 175 %…).
 - Skips the intro video, which hangs on a black screen on modern Windows.
 
@@ -64,7 +68,9 @@ original `Antanta.exe` – just run `Install.cmd` again.
 
 ```
 python tools/build_patched_exe.py Antanta.exe base.exe 1024x768 1152x720 1280x800 1440x900
-python tools/smooth60.py base.exe out.exe
+python tools/smooth60.py base.exe smooth.exe
+python tools/text_overlay.py smooth.exe overlay.exe
+python tools/fps_counter.py overlay.exe out.exe
 python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch
 ```
 
@@ -116,7 +122,11 @@ oryginalny `Antanta.exe` – wystarczy ponownie uruchomić `Install.cmd`.
     współczesne sterowniki nie obsługują; teraz jest on czyszczony);
   - jednostki poruszają się płynnie do 60 klatek na sekundę: logika gry zachowuje oryginalne tempo
     (jeden krok co „prędkość gry” milisekund), a w czasie, w którym gra dotąd czekała, pokazuje
-    dodatkowe klatki z jednostkami narysowanymi między ich pozycjami.
+    dodatkowe klatki z jednostkami narysowanymi między ich pozycjami;
+  - opisy przycisków (np. koszt budowy) nie migają w tych dodatkowych klatkach;
+  - teksty interfejsu są rysowane na osobnej warstwie, co stabilizuje liczbę klatek;
+  - licznik klatek w prawym górnym rogu („FPS 60  max 33 ms”: klatki na sekundę i najdłuższa
+    klatka z ostatniej sekundy).
 - Ostry obraz przy skalowaniu ekranu w Windows (125 %, 150 %, 175 %…).
 - Pomija film wstępny, który na współczesnym Windows zawiesza się na czarnym ekranie.
 

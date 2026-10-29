@@ -29,7 +29,8 @@ foreach ($l in $patchLines | Select-Object -First 3) { $k, $v = $l -split ' ', 2
 $exe = Join-Path $GameDir $GameExe
 $hash = Get-Sha256 $exe
 # Antanta.exe patched by an older release of this fix: start again from the backed-up original.
-$olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27550b')   # v1.0.0
+$olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27550b',   # v1.0.0
+                   '63f0395798b47fca1609fd7386f1748ce2528f2abca39496da99fa5b1a7c6ab6')   # v1.1.0
 $savedOrig = Join-Path $backup $GameExe
 if ($olderReleases -contains $hash -and (Test-Path $savedOrig) -and (Get-Sha256 $savedOrig) -eq $header['source-sha256']) {
     Copy-Item $savedOrig $exe -Force
