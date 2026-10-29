@@ -44,22 +44,29 @@ original `Antanta.exe` – just run `Install.cmd` again.
   - widescreen resolutions instead of 1152×864/1280×960/1280×1024, with the map view and the
     top bar adjusted to the screen width;
   - units no longer vanish while the map scrolls (the game copied its depth buffer onto itself,
-    which modern graphics drivers do not support; it is now cleared instead).
+    which modern graphics drivers do not support; it is now cleared instead);
+  - units move smoothly at up to 60 fps: the game logic keeps its original pace (one step per
+    "game speed" milliseconds), and in the time the game used to sleep it shows extra frames with
+    units drawn between their positions.
 - Sharp picture with Windows display scaling (125 %, 150 %, 175 %…).
 - Skips the intro video, which hangs on a black screen on modern Windows.
 
 ### Known limitations
 
-- The game is designed to run at about 20 frames per second (the "game speed" setting is the
-  length of one game step in milliseconds) and scrolls the map in whole-tile steps. This is how
-  the original works and is not changed by this fix.
+- The map still scrolls in whole-tile steps, as in the original; while scrolling the game runs at
+  its original frame rate.
 - The main menu is drawn in 4:3, so it has black bars at the sides.
 
 ### For developers
 
-`installer/antanta.patch` is a byte-level patch generated from `tools/build_patched_exe.py`
-(`python tools/build_patched_exe.py Antanta.exe out.exe 1024x768 1152x720 1280x800 1440x900`,
-then `python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch`).
+`installer/antanta.patch` is a byte-level patch generated from `tools/build_patched_exe.py` and
+`tools/smooth60.py` (`pip install pefile keystone-engine`):
+
+```
+python tools/build_patched_exe.py Antanta.exe base.exe 1024x768 1152x720 1280x800 1440x900
+python tools/smooth60.py base.exe out.exe
+python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch
+```
 
 ---
 
@@ -106,15 +113,17 @@ oryginalny `Antanta.exe` – wystarczy ponownie uruchomić `Install.cmd`.
   - rozdzielczości panoramiczne zamiast 1152×864/1280×960/1280×1024, z widokiem mapy i górnym
     paskiem dopasowanymi do szerokości ekranu;
   - jednostki nie znikają przy przewijaniu mapy (gra kopiowała bufor głębi sam na siebie, czego
-    współczesne sterowniki nie obsługują; teraz jest on czyszczony).
+    współczesne sterowniki nie obsługują; teraz jest on czyszczony);
+  - jednostki poruszają się płynnie do 60 klatek na sekundę: logika gry zachowuje oryginalne tempo
+    (jeden krok co „prędkość gry” milisekund), a w czasie, w którym gra dotąd czekała, pokazuje
+    dodatkowe klatki z jednostkami narysowanymi między ich pozycjami.
 - Ostry obraz przy skalowaniu ekranu w Windows (125 %, 150 %, 175 %…).
 - Pomija film wstępny, który na współczesnym Windows zawiesza się na czarnym ekranie.
 
 ### Znane ograniczenia
 
-- Gra jest zaprojektowana na około 20 klatek na sekundę (ustawienie „prędkość gry” to długość
-  jednego kroku gry w milisekundach) i przewija mapę skokami o całe pole. Tak działa oryginał;
-  poprawka tego nie zmienia.
+- Mapa nadal przewija się skokami o całe pole, jak w oryginale; podczas przewijania gra działa
+  w oryginalnej liczbie klatek.
 - Menu główne jest rysowane w proporcjach 4:3, więc ma czarne pasy po bokach.
 
 ## Credits

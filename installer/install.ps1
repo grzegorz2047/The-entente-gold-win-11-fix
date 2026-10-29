@@ -28,6 +28,14 @@ $header = @{}
 foreach ($l in $patchLines | Select-Object -First 3) { $k, $v = $l -split ' ', 2; $header[$k] = $v }
 $exe = Join-Path $GameDir $GameExe
 $hash = Get-Sha256 $exe
+# Antanta.exe patched by an older release of this fix: start again from the backed-up original.
+$olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27550b')   # v1.0.0
+$savedOrig = Join-Path $backup $GameExe
+if ($olderReleases -contains $hash -and (Test-Path $savedOrig) -and (Get-Sha256 $savedOrig) -eq $header['source-sha256']) {
+    Copy-Item $savedOrig $exe -Force
+    $hash = $header['source-sha256']
+    Say 'Aktualizuje poprawke z poprzedniej wersji.' 'Updating the fix from a previous version.'
+}
 if ($hash -eq $header['target-sha256']) {
     Say 'Antanta.exe jest juz poprawiony.' 'Antanta.exe is already patched.'
 } elseif ($hash -eq $header['source-sha256']) {
