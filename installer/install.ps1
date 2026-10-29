@@ -32,7 +32,8 @@ $hash = Get-Sha256 $exe
 $olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27550b',   # v1.0.0
                    '63f0395798b47fca1609fd7386f1748ce2528f2abca39496da99fa5b1a7c6ab6',   # v1.1.0
                    '0a27c9df159ff9b38f07275ea19ae92983f63983cb86082139d981a1a5d209ae',   # v1.2.0 pre-release build
-                   '9e43eaf544d6521ce72d8038c96e6827670cd8129949acc50d738c16c2b64064')   # v1.2.0 pre-release build 2
+                   '9e43eaf544d6521ce72d8038c96e6827670cd8129949acc50d738c16c2b64064',   # v1.2.0 pre-release build 2
+                   'd4f55e2357d9df8293f3d24acd550c5118322e0ba31a64f3c15511ed4243c837')   # v1.2.0
 $savedOrig = Join-Path $backup $GameExe
 if ($olderReleases -contains $hash -and (Test-Path $savedOrig) -and (Get-Sha256 $savedOrig) -eq $header['source-sha256']) {
     Copy-Item $savedOrig $exe -Force

@@ -8,7 +8,14 @@ default) is over, so it shows ~20 fps. This keeps the logic untouched and only f
   QueryPerformanceCounter timestamp and bumps our tick counter.
 - 0x46e2d5 (Sleep until the next tick) becomes smooth_wait: while more than one frame of the tick
   remains it renders another frame (0x42b1d0, which ends with Flip) instead of sleeping. Only in the
-  plain map view: not while scrolling, in menus, or in the alternate render path.
+  map view: not while edge-scrolling, in menus, or in the alternate render path. An extra frame is
+  also skipped when less time is left than the last extra frame took, so a slow one (the camera
+  being dragged on the minimap redraws the whole terrain) does not stretch the tick.
+- 0x46e289: the loop skipped the wait altogether when the camera was moved by other means than
+  edge scrolling (scroll flag 0x8be3c4 = 3 while the mouse button is held on the minimap, 10 for a
+  camera jump), so the logic ran once per rendered frame. Harmless at the original ~12 fps, but with
+  fast rendering the game ran up to 3x faster while the button was held. These cases now wait for
+  the end of the tick like the plain map view.
 - 0x5187f0 draws one unit (thiscall, arg = unit; position floats at +0x1c x, +0x20 y, +0x24, +0x28).
   It is wrapped: the unit's position is replaced by prev + (cur - prev) * alpha for the duration of
   the draw and restored right after, so game logic never sees it. prev/cur are the positions seen
@@ -43,6 +50,7 @@ DATA = B + reloc.VirtualAddress + reloc.SizeOfRawData          # first byte past
 N = 4096                                                       # interpolation table entries
 ENTRY = 40                                                     # key, tick, prev[4 floats], cur[4 floats]
 G_TICK, G_TS, G_QPF, G_NOW, G_TMP, G_ALPHA, G_TIMERRES, G_EXTRA = (DATA + o for o in (0, 8, 16, 24, 32, 40, 48, 56))
+G_LAST = DATA + 64                                             # duration of the last extra frame (ms)
 GetModuleHandleA, GetProcAddress = 0x9c88b8, 0x9c8924
 TABLE = DATA + 0x100
 R_TICK = TABLE + N * ENTRY                                     # tooltip replay: tick, count, entries
@@ -69,6 +77,9 @@ tick_start:
     push {G_TS:#x}
     call dword ptr [{QPC:#x}]
     inc dword ptr [{G_TICK:#x}]
+    mov eax, dword ptr [{G_LAST:#x}]    ; forget a slow extra frame gradually (1/8 per tick)
+    shr eax, 3
+    sub dword ptr [{G_LAST:#x}], eax
     pop eax
     ret
 
@@ -253,23 +264,29 @@ smooth_wait:
 timer_skip:
     popal
 timer_ok:
-    cmp byte ptr [0x8be3c4], 0          ; scrolling this tick
-    jne plain_sleep
+    mov al, byte ptr [0x8be3c4]         ; edge scrolling this tick: the game's own pacing
+    cmp al, 1
+    je plain_sleep
+    cmp al, 2
+    je plain_sleep
     cmp dword ptr [0x9c2b04], 0         ; menu screens
     jne plain_sleep
     cmp byte ptr [0x998ee1], 0          ; alternate render path
     jne plain_sleep
 wait_loop:
-    call elapsed_ms
-    fistp dword ptr [{G_TMP:#x}]
-    movzx eax, byte ptr [0x998ed0]
-    movzx eax, byte ptr [eax + 0x998db0]
-    sub eax, dword ptr [{G_TMP:#x}]     ; ms left in this tick
+    call ms_left
     cmp eax, 17
     jl finish
+    cmp eax, dword ptr [{G_LAST:#x}]    ; an extra frame as slow as the last one would overrun the tick
+    jl finish
+    push eax
     mov dword ptr [{G_EXTRA:#x}], 1
     call {RENDER:#x}
     mov dword ptr [{G_EXTRA:#x}], 0
+    call ms_left
+    pop edx
+    sub edx, eax
+    mov dword ptr [{G_LAST:#x}], edx
     jmp wait_loop
 finish:
     test eax, eax
@@ -280,6 +297,14 @@ done_wait:
     ret 4
 plain_sleep:
     jmp dword ptr [{Sleep:#x}]
+
+ms_left:                                ; eax = ms left in this tick
+    call elapsed_ms
+    fistp dword ptr [{G_TMP:#x}]
+    movzx eax, byte ptr [0x998ed0]
+    movzx eax, byte ptr [eax + 0x998db0]
+    sub eax, dword ptr [{G_TMP:#x}]
+    ret
 
 ; ---------------- texts drawn once per tick: replay in the extra frames ----------------
 ; Texts are queued with the method 0x4fdc90 (thiscall on the text object 0x9a5e98, 6 args, ret 0x18;
@@ -431,6 +456,8 @@ def patch_branch(op, at, to, pad=0):
 
 patch_branch(b'\xe9', 0x535530, label('tick_start'), 7)
 patch_branch(b'\xe8', 0x46e2d5, label('smooth_wait'), 1)
+expect(0x46e287, '3c027550')                      # cmp al, 2 / jne 0x46e2db (no wait at all)
+data[off(0x46e28a)] = 0x46e2c7 - 0x46e28b         # -> jne 0x46e2c7: wait for the end of the tick
 patch_branch(b'\xe9', 0x5187f0, label('unit_draw'), 1)
 expect(0x42b242, 'e81660fdff')                   # call 0x40125d (-> 0x4cd870)
 patch_branch(b'\xe8', 0x42b242, label('periodic_job'))
