@@ -57,7 +57,8 @@ $olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27
                    '728017e8bfc5132e89460b99e3ab237695ac515789fab6930897e7c626b993f1',   # PR #8 (tips overlay)
                    'eee2e6d1de2147f65b2da28330f680fdbe7f4f7e3f5f1181cf080c809dac1346',   # PR #8 with improvements
                    '13ef3a69307fcf0c930ebd010a21c69f75c4516be688adecbb03eb1c2bb95c36',   # PR #9 (scroll pace)
-                   '274ba786b18062a682c9c84f58ca869f3eb4bfdf9e50b2632d66eb8c14ac402a')   # PR #9 with improvements
+                   '274ba786b18062a682c9c84f58ca869f3eb4bfdf9e50b2632d66eb8c14ac402a',   # PR #9 with improvements
+                   '96ff902e53891dfaed776a308239c15fbc3cbdd943d2295b65e57c29b5f08ccf')   # v1.3.1 with improvements
 # switching between the basic fix and the one with improvements also starts from the original
 $olderReleases += @($basic.Header['target-sha256'], $withZoom.Header['target-sha256']) | Where-Object { $_ -ne $header['target-sha256'] }
 $savedOrig = Join-Path $backup $GameExe
@@ -169,5 +170,7 @@ Say "Rozdzielczosc zmienisz w Opcjach (przytrzymaj przycisk zmiany): $ModeList."
 if ($Improvements) {
     Say 'Ulepszenia: kolko myszy oddala mape (do 1,5x szerszego widoku) i przybliza ja (do 2,5x).' `
         'Improvements: the mouse wheel zooms the map out (up to a 1.5x wider view) and in (up to 2.5x).'
+    Say 'Mapa bez ramki, zasoby i energia na polprzezroczystym pasku u gory.' `
+        'The map without the frame; resources and electricity on a semi-transparent top bar.'
 }
 Write-Host ''

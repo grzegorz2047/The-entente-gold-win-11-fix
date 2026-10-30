@@ -39,6 +39,11 @@ bar, panels, minimap) is about a third smaller than with the basic fix. Zooming 
 original graphics, so close up they are less sharp. You can switch between the two variants at any
 time by running the other `.cmd` file.
 
+This variant also has a modern HUD: the map fills the whole screen without the wooden frame, and the
+resources are shown on a semi-transparent bar at the top: the game's resource icons with their values,
+the population with the housing limit (red when it is reached) and the electricity balance as a gauge
+(green: surplus, yellow: balanced, red: shortage) instead of the thermometer at the right edge.
+
 ### Uninstall
 
 Double-click **`Uninstall.cmd`**. All original game files are restored.
@@ -92,7 +97,8 @@ python tools/text_overlay.py smooth2.exe overlay2.exe
 python tools/fps_counter.py overlay2.exe out2.exe
 python tools/zoom.py out2.exe zoom.exe
 python tools/terrain_strip.py zoom.exe zoom2.exe
-python tools/make_diff.py Antanta.exe zoom2.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + zoom.py + terrain_strip.py"
+python tools/modern_hud.py zoom2.exe hud.exe
+python tools/make_diff.py Antanta.exe hud.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + zoom.py + terrain_strip.py + modern_hud.py"
 ```
 
 ---
@@ -134,6 +140,11 @@ pokazuje widoczny obszar.
 pasek, panele, minimapa) jest o około jedną trzecią mniejszy niż w podstawowej poprawce.
 Przybliżenie powiększa oryginalną grafikę, więc z bliska jest mniej ostra. Między wariantami można
 przełączać się w każdej chwili, uruchamiając drugi plik `.cmd`.
+
+Ten wariant ma też nowoczesny interfejs: mapa zajmuje cały ekran, bez drewnianej ramki, a zasoby są
+na półprzezroczystym pasku u góry: ikony zasobów z gry z ich wartościami, ludność z limitem
+mieszkań (na czerwono, gdy limit jest osiągnięty) i bilans prądu jako wskaźnik (zielony: nadwyżka,
+żółty: równowaga, czerwony: brak) zamiast termometru przy prawej krawędzi.
 
 ### Odinstalowanie
 
