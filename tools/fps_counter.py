@@ -32,7 +32,8 @@ elif site[0] == 0xe8 and site[5:] == b'\x90\x90':
 else:
     sys.exit(f'unexpected bytes at 0x42b8ce: {site.hex()}')
 expect(0x44506d, 'a158e25a008b4c2440')             # mov eax,[backbuffer] / mov ecx,[esp+0x40] (hdc)
-expect(0x9e3580, 'ff15e4889c00')                   # smooth60.py applied
+if data[off(0x46e2d5)] != 0xe8:                   # smooth60.py applied (its call instead of Sleep)
+    sys.exit('apply smooth60.py first')
 
 reloc = next(s for s in pe.sections if s.Name.startswith(b'.reloc'))
 raw_lo = B + reloc.VirtualAddress
