@@ -82,15 +82,17 @@ original `Antanta.exe` – just run `Install.cmd` again.
 python tools/build_patched_exe.py Antanta.exe base.exe 1024x768 1152x720 1280x800 1440x900
 python tools/smooth60.py base.exe smooth.exe
 python tools/text_overlay.py smooth.exe overlay.exe
-python tools/fps_counter.py overlay.exe out.exe
-python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch
+python tools/fps_counter.py overlay.exe counter.exe
+python tools/terrain_strip.py counter.exe out.exe
+python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch "tools/build_patched_exe.py + smooth60.py + text_overlay.py + fps_counter.py + terrain_strip.py"
 
 python tools/build_patched_exe.py Antanta.exe base2.exe 1024x768 1152x720 1280x800 1920x1200
 python tools/smooth60.py base2.exe smooth2.exe
 python tools/text_overlay.py smooth2.exe overlay2.exe
 python tools/fps_counter.py overlay2.exe out2.exe
 python tools/zoom.py out2.exe zoom.exe
-python tools/make_diff.py Antanta.exe zoom.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + zoom.py"
+python tools/terrain_strip.py zoom.exe zoom2.exe
+python tools/make_diff.py Antanta.exe zoom2.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + zoom.py + terrain_strip.py"
 ```
 
 ---
