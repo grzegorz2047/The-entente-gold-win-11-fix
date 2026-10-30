@@ -19,6 +19,17 @@ Applied last in the improvements chain (after terrain_strip.py). usage: python m
 - Sizes follow the screen height: font max(14, H * 22 / 1200) px (22 in 1920x1200), icons 4/3 of it,
   the band 8 px taller than the icons. The game's "build more houses" message at the top left moves
   below the band.
+- The minimap is N x N instead of 200 x 200, N = 5/32 of the mission mode's width (300 in 1920x1200,
+  at least 200; the minimap is made while the loading screen still runs in the menu mode): the
+  surface size (0x43dfe6), its position (200 + 13 from the screen edge), the map tiles per pixel
+  (0.005 * map size, 6 functions) and the locked rectangle follow N; the generation writes rows with
+  the surface pitch and takes whole map rows (W * y * fy with a fractional fy mixed rows); the fog of
+  war keeps its 200 x 200 grid (0x978a00, overlay [0x982c70], 200 / map size at [0x9536f8]): the overlay
+  is stretched over the minimap, generation and the visibility test 0x464190 convert to that grid.
+  The saved game preview (0x43faa0) stays 200 x 200, so saves stay compatible. Units are 2 x 2 dots
+  from N = 300. The six buttons above it (rectangles of 0x4e1df0, BltFast in 0x4e11c0) are scaled
+  by N / 200 with Blt, and the minimap area of 0x4cd4b0 follows. Its wooden frame (MiniMapBevelLeft,
+  MiniMapBevelUp) is replaced by a semi-transparent panel drawn before the minimap (0x42b4e9).
 The game is loaded at its preferred base (no ASLR flag), so its base relocations are never applied;
 the code and data live where the relocation table was (0x9cb000), and the table is dropped.
 """
@@ -47,7 +58,8 @@ expect(0x4e0640, call(0x4e0640, 0x4042dc).hex())   # free the Econom+.bmp data (
 expect(0x4450c7, '6a166a1e')                      # "build more houses" queued at y 0x16, x 0x1e
 BEVEL_BLTS = [(0x4e1201, 'ff5114'), (0x4e1237, 'ff5114'), (0x4e1276, 'ff5214'), (0x4e12bd, 'ff5214')]
 THERMOMETER = [(0x4e13a4, 'ff521c'), (0x4e13c4, 'ff5214')]   # BltFast of the scale, colour fill of the level
-for va, hexbytes in BEVEL_BLTS + THERMOMETER:
+MM_BEVELS = [(0x43e919, 'ff511c'), (0x43e985, 'ff511c'), (0x43e9b8, 'ff511c')]   # minimap frame: button strip, left
+for va, hexbytes in BEVEL_BLTS + THERMOMETER + MM_BEVELS:
     expect(va, hexbytes)
 
 RELOC_VA, RELOC_SIZE = 0x9cb000, 0x12bc0          # the relocation table of the Steam exe
@@ -70,7 +82,15 @@ ICON_NAMES = DATA + 0x1a0
 STR = DATA + 0x1c0
 TXT = DATA + 0x240
 VB = DATA + 0x300                                 # up to 24 vertices of 20 bytes
-DATA_END = DATA + 0x500
+(MM_N, MM_N13, MM_NF, MM_INV, MM_PW, MM_F200X, MM_F200Y, K200, K160) = (DATA + 0x500 + 4 * i for i in range(9))
+MM_RECT = DATA + 0x530                             # RECT of the stretched fog overlay
+MM_UITOP, MM_PANEL = DATA + 0x540, DATA + 0x544    # minimap area and panel above the map (scaled 0x2c, 0x24 + 4)
+BTN_RECT = DATA + 0x550                            # destination of a stretched minimap button
+BTN_RECTS = 0x9b0c58                               # the 6 button rectangles of 0x4e1df0
+FOG_SURFACE, BACK = 0x982c70, 0x5ae258
+MISSION_SLOT, HUD_SCALE = 0x5ae245, 0x595e14     # mode of the mission; W / 1024 per mode (build_patched_exe.py)
+DATA_END = DATA + 0x560
+MM_X, MM_Y, MM_FX, MM_FY = 0x9536ea, 0x9536e8, 0x9536f0, 0x9536ec   # minimap position (words), map tiles per pixel
 assert DATA_END <= CODE_END
 
 # render states (state, value) and texture stage states (stage, type, value) of the band
@@ -651,6 +671,7 @@ draw_band:
     call layout
     call build_verts
     mov dword ptr [{G_NV:#x}], eax
+draw_vb:                                  ; draw the G_NV vertices in VB (the caller checked the device)
     mov esi, dword ptr [{DEVICE:#x}]
     mov eax, dword ptr [esi]
     push esi
@@ -752,14 +773,297 @@ db_scene:
 db_ret:
     ret
 
+; ---- minimap: N x N instead of 200 x 200, on a semi-transparent panel ----
+mm_frame:                                 ; instead of call 0x43e8d0 (minimap) at 0x42b4e9
+    pushal
+    cmp dword ptr [{DEVICE:#x}], 0
+    je mf_done
+    mov dword ptr [{G_VP:#x}], {VB:#x}
+    movzx esi, word ptr [{MM_X:#x}]
+    sub esi, 10                           ; panel left: the button row starts 7 px left of the map
+    movzx ebp, word ptr [{MM_Y:#x}]
+    sub ebp, dword ptr [{MM_PANEL:#x}]    ; panel top: above the button row
+    movzx eax, word ptr [{W:#x}]
+    movzx ebx, word ptr [{H:#x}]
+    push {BAND_BOTTOM:#x}
+    push {BAND_TOP:#x}
+    push ebx
+    push eax
+    push ebp
+    push esi
+    call add_quad
+    add esp, 24
+    movzx eax, word ptr [{W:#x}]
+    lea edx, [ebp + 1]
+    push {EDGE:#x}
+    push {EDGE:#x}
+    push edx
+    push eax
+    push ebp
+    push esi
+    call add_quad                         ; light top edge
+    add esp, 24
+    movzx ebx, word ptr [{H:#x}]
+    lea edx, [esi + 1]
+    push {EDGE:#x}
+    push {EDGE:#x}
+    push ebx
+    push edx
+    push ebp
+    push esi
+    call add_quad                         ; light left edge
+    add esp, 24
+    mov dword ptr [{G_NV:#x}], 18
+    call draw_vb
+mf_done:
+    popal
+    jmp 0x4026cb
+
+mm_compute:                               ; N = W * 5 / 32 of the mission mode (a multiple of 4, at least 200)
+    movzx eax, byte ptr [{MISSION_SLOT:#x}]   ; the minimap is made while the loading screen is still shown
+    fld dword ptr [eax*4 + {HUD_SCALE:#x}]    ; W / 1024 of that mode
+    fmul dword ptr [{K160:#x}]
+    fistp dword ptr [{MM_N:#x}]
+    mov eax, dword ptr [{MM_N:#x}]
+    and eax, -4
+    cmp eax, 200
+    jge mc_min
+    mov eax, 200
+mc_min:
+    mov dword ptr [{MM_N:#x}], eax
+    add eax, 13
+    mov dword ptr [{MM_N13:#x}], eax
+    fild dword ptr [{MM_N:#x}]
+    fstp dword ptr [{MM_NF:#x}]
+    fld1
+    fidiv dword ptr [{MM_N:#x}]
+    fstp dword ptr [{MM_INV:#x}]
+    mov eax, dword ptr [{MM_N:#x}]        ; heights above the map, scaled: the minimap area, the panel
+    imul eax, eax, 0x2c
+    cdq
+    idiv dword ptr [{K200:#x}]
+    mov dword ptr [{MM_UITOP:#x}], eax
+    mov eax, dword ptr [{MM_N:#x}]
+    imul eax, eax, 0x24
+    cdq
+    idiv dword ptr [{K200:#x}]
+    add eax, 4
+    mov dword ptr [{MM_PANEL:#x}], eax
+    ret
+
+mm_create:                                ; instead of push 200; push 200 (size of the minimap surface)
+    push eax
+    push ecx
+    call mm_compute
+    pop ecx
+    pop eax
+    sub esp, 8
+    push eax
+    mov eax, dword ptr [esp + 12]         ; move the return address down, the size above it twice
+    mov dword ptr [esp + 4], eax
+    mov eax, dword ptr [{MM_N:#x}]
+    mov dword ptr [esp + 8], eax
+    mov dword ptr [esp + 12], eax
+    pop eax
+    ret
+
+mm_y_ax:                                  ; instead of sub ax, 0xd5 (200 + 13 from the edge); mov [y], ax
+    sub ax, word ptr [{MM_N13:#x}]
+    mov word ptr [{MM_Y:#x}], ax
+    ret
+mm_sub_cx:                                ; instead of sub cx, 0xd5
+    sub cx, word ptr [{MM_N13:#x}]
+    ret
+mm_sub_dx:                                ; instead of sub dx, 0xd5
+    sub dx, word ptr [{MM_N13:#x}]
+    ret
+mm_add_eax:                               ; instead of add eax, 200 (the locked rectangle)
+    add eax, dword ptr [{MM_N:#x}]
+    ret
+
+mm_pitch:                                 ; after the minimap surface is locked: its pitch in pixels
+    mov eax, dword ptr [esp + 0x60]       ; DDSURFACEDESC2.lPitch
+    shr eax, 1
+    mov dword ptr [{MM_PW:#x}], eax
+    mov edi, dword ptr [esp + 0x74]       ; the replaced mov edi, [esp + 0x70] (lpSurface)
+    pop ecx
+    push 0xff                             ; the replaced push
+    jmp ecx
+
+mm_row:                                   ; ebp = row eax * pitch (was eax * 25, used * 8)
+    mov ebp, eax
+    imul ebp, dword ptr [{MM_PW:#x}]
+    ret
+
+mm_preview:                               ; the saved game preview stays 200 x 200: its own scale
+    fild dword ptr [{MM_N:#x}]
+    fidiv dword ptr [{K200:#x}]
+    fld st(0)
+    fmul dword ptr [{MM_FX:#x}]
+    fstp dword ptr [{MM_F200X:#x}]
+    fmul dword ptr [{MM_FY:#x}]
+    fstp dword ptr [{MM_F200Y:#x}]
+    pop eax
+    sub esp, 0xac                         ; the replaced instruction
+    jmp eax
+
+mm_index:                                 ; map tile under minimap pixel x [esp+0x2c], y [esp+0x44] (float)
+    fld dword ptr [esp + 0x48]            ; the game added W * y * fy + x * fx: with a fractional fy
+    fmul dword ptr [{MM_FY:#x}]           ; (N not dividing the map) rows mix; whole rows instead
+    call {FTOL:#x}
+    movzx ecx, word ptr [0x8be392]
+    imul eax, ecx
+    push eax
+    fild dword ptr [esp + 0x34]
+    fmul dword ptr [{MM_FX:#x}]
+    call {FTOL:#x}
+    pop ecx
+    add eax, ecx
+    ret
+
+mm_fog:                                   ; fog test of minimap pixel (esi, [esp+0x24]): its grid is 200 x 200
+    mov eax, dword ptr [esp + 0x28]
+    imul eax, eax, 200
+    xor edx, edx
+    div dword ptr [{MM_N:#x}]
+    push eax
+    mov eax, esi
+    imul eax, eax, 200
+    xor edx, edx
+    div dword ptr [{MM_N:#x}]
+    push eax
+    mov ecx, dword ptr [0x984d24]
+    call 0x402a18
+    ret
+
+mm_fog_blit:                              ; the fog overlay (200 x 200) stretched over the N x N minimap
+    movzx eax, word ptr [{MM_X:#x}]
+    mov dword ptr [{MM_RECT:#x}], eax
+    add eax, dword ptr [{MM_N:#x}]
+    mov dword ptr [{MM_RECT + 8:#x}], eax
+    movzx eax, word ptr [{MM_Y:#x}]
+    mov dword ptr [{MM_RECT + 4:#x}], eax
+    add eax, dword ptr [{MM_N:#x}]
+    mov dword ptr [{MM_RECT + 12:#x}], eax
+    push 0
+    push 0x1008000                        ; DDBLT_KEYSRC | DDBLT_WAIT
+    push 0
+    push dword ptr [{FOG_SURFACE:#x}]
+    push {MM_RECT:#x}
+    mov eax, dword ptr [{BACK:#x}]
+    push eax
+    mov ecx, dword ptr [eax]
+    call dword ptr [ecx + 0x14]           ; Blt
+    ret
+
+mm_div_fy200:                             ; st0 / (fy * 200 / N): minimap pixel on the 200 x 200 fog grid
+    fdiv dword ptr [{MM_FY:#x}]
+    fmul dword ptr [{MM_NF:#x}]
+    fidiv dword ptr [{K200:#x}]
+    ret
+mm_div_fx200:
+    fdiv dword ptr [{MM_FX:#x}]
+    fmul dword ptr [{MM_NF:#x}]
+    fidiv dword ptr [{K200:#x}]
+    ret
+
+mm_btn_scale:                             ; end of 0x4e1df0 (button rectangles): scale them by N / 200 from the
+    mov dword ptr [0x9b0c74], eax         ; minimap corner (the replaced instruction)
+    pushal
+    movzx ebx, word ptr [{MM_X:#x}]
+    movzx ebp, word ptr [{MM_Y:#x}]
+    xor edi, edi
+bs_next:
+    mov ecx, ebx                          ; left, top, right, bottom: x, y, x, y
+    test edi, 1
+    je bs_x
+    mov ecx, ebp
+bs_x:
+    mov eax, dword ptr [edi*4 + {BTN_RECTS:#x}]
+    sub eax, ecx
+    imul eax, dword ptr [{MM_N:#x}]
+    cdq
+    idiv dword ptr [{K200:#x}]
+    add eax, ecx
+    mov dword ptr [edi*4 + {BTN_RECTS:#x}], eax
+    inc edi
+    cmp edi, 24
+    jb bs_next
+    popal
+    pop esi
+    ret
+
+mm_btn_blt_a:                             ; instead of push edx (x); push eax (surface); call [ecx + 0x1c] (BltFast)
+    push edx
+    push eax
+    jmp btn_blt
+mm_btn_blt_b:                             ; instead of push eax (x); push ecx (surface); call [edx + 0x1c]
+    push eax
+    push ecx
+btn_blt:                                  ; a minimap button stretched by N / 200 with Blt
+    pushal                                ; [esp+0x20] surface, +0x24 x, +0x2c y, +0x30 source, +0x34 its RECT
+    mov esi, dword ptr [esp + 0x34]
+    mov eax, dword ptr [esi + 8]
+    sub eax, dword ptr [esi]
+    imul eax, dword ptr [{MM_N:#x}]
+    cdq
+    idiv dword ptr [{K200:#x}]
+    mov ecx, dword ptr [esp + 0x24]
+    mov dword ptr [{BTN_RECT:#x}], ecx
+    add eax, ecx
+    mov dword ptr [{BTN_RECT + 8:#x}], eax
+    mov eax, dword ptr [esi + 12]
+    sub eax, dword ptr [esi + 4]
+    imul eax, dword ptr [{MM_N:#x}]
+    cdq
+    idiv dword ptr [{K200:#x}]
+    mov ecx, dword ptr [esp + 0x2c]
+    mov dword ptr [{BTN_RECT + 4:#x}], ecx
+    add eax, ecx
+    mov dword ptr [{BTN_RECT + 12:#x}], eax
+    push 0
+    push 0x1000000                        ; DDBLT_WAIT (the buttons are opaque: BltFast flags 0x10)
+    push esi
+    push dword ptr [esp + 0x3c]
+    push {BTN_RECT:#x}
+    mov eax, dword ptr [esp + 0x34]
+    push eax
+    mov ecx, dword ptr [eax]
+    call dword ptr [ecx + 0x14]
+    mov dword ptr [esp + 0x1c], eax
+    popal
+    add esp, 8
+    ret 16
+
+mm_ui_top:                                ; top of the minimap area for 0x4cd4b0 (was my - 0x2c)
+    movzx edx, word ptr [{MM_Y:#x}]
+    sub edx, dword ptr [{MM_UITOP:#x}]
+    ret
+
+mm_dot:                                   ; a unit on the minimap: 2 x 2 pixels when N >= 300
+    mov word ptr [ecx + ebp*2], di
+    cmp dword ptr [{MM_N:#x}], 300
+    jb md_done
+    lea eax, [ecx + ebp*2]
+    mov word ptr [eax + 2], di
+    mov word ptr [eax + ebx*2], di
+    mov word ptr [eax + ebx*2 + 2], di
+md_done:
+    mov ecx, dword ptr [esp + 0x14]       ; the replaced mov ecx, [esp + 0x10]
+    ret
+
 labels:
-    .long hud_frame, hud_res, hud_icons
+    .long hud_frame, hud_res, hud_icons, mm_frame, mm_create, mm_y_ax, mm_sub_cx, mm_sub_dx, mm_add_eax
+    .long mm_pitch, mm_row, mm_preview, mm_dot, mm_index, mm_fog, mm_fog_blit, mm_div_fy200, mm_div_fx200
+    .long mm_btn_scale, mm_btn_blt_a, mm_btn_blt_b, mm_ui_top
 '''
 
 ks = Ks(KS_ARCH_X86, KS_MODE_32)
 code = bytes(ks.asm('\n'.join(l.split(';')[0] for l in asm.splitlines()), CODE)[0])
-hud_frame, hud_res, hud_icons = struct.unpack('<3I', code[-12:])
-code = code[:-12]
+N_LABELS = 22
+(hud_frame, hud_res, hud_icons, mm_frame, mm_create, mm_y_ax, mm_sub_cx, mm_sub_dx, mm_add_eax, mm_pitch,
+ mm_row, mm_preview, mm_dot, mm_index, mm_fog, mm_fog_blit, mm_div_fy200, mm_div_fx200, mm_btn_scale, mm_btn_blt_a, mm_btn_blt_b, mm_ui_top) = struct.unpack(f'<{N_LABELS}I', code[-4 * N_LABELS:])
+code = code[:-4 * N_LABELS]
 assert CODE + len(code) <= DATA, f'code too large: {len(code)} bytes'
 
 init = bytearray(DATA_END - DATA)
@@ -772,15 +1076,62 @@ struct.pack_into('<6I', init, ICON_NAMES - DATA, *NAMES)
 for at, x in zip(s_at, STRINGS):
     init[at - DATA:at - DATA + len(x)] = x
 init[W_ZEROS - DATA:W_ZEROS - DATA + 10] = '00000'.encode('utf-16le')
-init[W_BOLT - DATA:W_BOLT - DATA + 2] = '⚡'.encode('utf-16le')
+struct.pack_into('<2I2fI2fIf', init, MM_N - DATA, 300, 313, 300.0, 1 / 300, 300, 0.0, 0.0, 200, 160.0)
+struct.pack_into('<2I', init, MM_UITOP - DATA, 0x2c * 300 // 200, 0x24 * 300 // 200 + 4)   # as for 1920x1200
+init[W_BOLT - DATA:W_BOLT - DATA + 2] ='⚡'.encode('utf-16le')
 
 data[off(CODE):off(CODE) + len(code)] = code
 data[off(DATA):off(DATA_END)] = init
 data[off(0x42b4ee):off(0x42b4ee) + 5] = call(0x42b4ee, hud_frame)
 data[off(0x444e41):off(0x444e41) + 5] = jmp(0x444e41, hud_res)
 data[off(0x4e0640):off(0x4e0640) + 5] = call(0x4e0640, hud_icons)
-for va, _ in BEVEL_BLTS + THERMOMETER:            # call [reg + n] -> add esp, 0x18 (the 6 pushed arguments)
+for va, _ in BEVEL_BLTS + THERMOMETER + MM_BEVELS:   # call [reg + n] -> add esp, 0x18 (the 6 pushed arguments)
     data[off(va):off(va) + 3] = bytes.fromhex('83c418')
+
+# minimap N x N: its size, position and scale wherever the game derives them from 200
+def put(va, old_hex, new):
+    expect(va, old_hex)
+    new = new + b'\x90' * (len(bytes.fromhex(old_hex)) - len(new))
+    data[off(va):off(va) + len(new)] = new
+put(0x42b4e9, call(0x42b4e9, 0x4026cb).hex(), call(0x42b4e9, mm_frame))
+put(0x43dfe6, '68c800000068c8000000', call(0x43dfe6, mm_create))           # CreateMiniMap: surface size
+for va in (0x4352fc, 0x43530e, 0x43e058, 0x43e08e, 0x43f682, 0x43f6a2, 0x4459cf, 0x4459df, 0x478175, 0x478188,
+           0x47c654, 0x47c666):                                            # fmul [0.005]: map size -> per pixel
+    put(va, 'd80dec' + 'f15700', b'\xd8\x0d' + struct.pack('<I', MM_INV))
+# the fog of war stays 200 x 200 (0x978a00, overlay [0x982c70], 200 / tiles at [0x9536f8], [0x9536f4]):
+# its overlay is stretched over the minimap and the visibility test 0x464190 gets the 200 scale
+put(0x43eb8b, '8b0d702c98006a01a158e25a006a00518b0de83695008b1081e1ffff00005133c9668b0dea3695005150ff521c',
+    call(0x43eb8b, mm_fog_blit))
+# the buttons above the minimap: rectangles and pictures scaled by N / 200
+put(0x4e1ebe, 'a3740c9b005ec3', jmp(0x4e1ebe, mm_btn_scale))
+for va in (0x4e1548, 0x4e16c2, 0x4e17e3, 0x4e1963):
+    put(va, '5250ff511c', call(va, mm_btn_blt_a))
+for va in (0x4e1a88, 0x4e1b6c):
+    put(va, '5051ff521c', call(va, mm_btn_blt_b))
+put(0x4cd4e1, '33d2668b15e836950083ea2c', call(0x4cd4e1, mm_ui_top))      # cursor over the minimap area
+put(0x464209, 'd835ec369500', call(0x464209, mm_div_fy200))
+put(0x46422f, 'd835f0369500', call(0x46422f, mm_div_fx200))
+for va, reg, stub in ((0x43e06c, 'e9', mm_sub_cx), (0x43e071, 'ea', mm_sub_dx), (0x43f69d, 'ea', mm_sub_dx)):
+    put(va, '6681' + reg + 'd500', call(va, stub))                       # sub r16, 0xd5: position
+for va in (0x43f6cd, 0x43e28d):                                            # sub ax, 0xd5; mov [y], ax
+    put(va, '662dd50066a3e8369500', call(va, mm_y_ax))
+put(0x43e374, 'b8c8000000', b'\xa1' + struct.pack('<I', MM_N))           # full redraw: width and height
+put(0x43e474, '8b7c247068ff000000', call(0x43e474, mm_pitch))             # after Lock: the pitch
+put(0x43e4de, '33c066a192e38b0089442410db442410d84c2444d80dec369500db44242cd80df0369500dec1e8f7d81100',
+    call(0x43e4de, mm_index))                                               # pixel -> map tile
+put(0x43e58a, '8b4424248b0d244d98005056e87d44fcff', call(0x43e58a, mm_fog))   # fog of war (200 x 200 grid)
+put(0x43e4b5, '8d34b68b44241c8d34b6c1e603', b'\x0f\xaf\x35' + struct.pack('<I', MM_PW) + bytes.fromhex('8b44241c'))
+put(0x43e719, '81c7c8000000', b'\x03\x3d' + struct.pack('<I', MM_PW))    # next row
+put(0x43e766, '8d04808d2c80', call(0x43e766, mm_row))                     # markers: row
+put(0x43e777, '8d0ce8', bytes.fromhex('8d0c28'))
+put(0x43e9e0, '05c8000000', call(0x43e9e0, mm_add_eax))                   # per frame: the locked rectangle
+put(0x43e9f8, '81c1c8000000', b'\x03\x0d' + struct.pack('<I', MM_N))
+put(0x43eb3d, '66893c698b4c2410', call(0x43eb3d, mm_dot))                 # unit dots
+put(0x43faa0, '81ecac000000', call(0x43faa0, mm_preview))                 # saved game preview: 200 x 200
+for va, old, new in ((0x43fb41, MM_FY, MM_F200Y), (0x43fb4b, MM_FX, MM_F200X)):
+    put(va, 'd80d' + struct.pack('<I', old).hex(), b'\xd8\x0d' + struct.pack('<I', new))
+for va, old, new in ((0x43fd56, MM_FY, MM_F200Y), (0x43fd6b, MM_FX, MM_F200X)):
+    put(va, 'd835' + struct.pack('<I', old).hex(), b'\xd8\x35' + struct.pack('<I', new))
 
 # fps_counter.py: its text on the band (x W - 280 for the larger font, y 4), without the black box
 fps_mode = bytes.fromhex('6a0255ff1580879c00')    # push 2 (OPAQUE); push ebp; call [SetBkMode]

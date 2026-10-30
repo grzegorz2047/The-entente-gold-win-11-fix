@@ -45,6 +45,9 @@ This variant also has a modern HUD: the map fills the whole screen without the w
 resources are shown on a semi-transparent bar at the top: the game's resource icons with their values,
 the population with the housing limit (red when it is reached) and the electricity balance as a gauge
 (green: surplus, yellow: balanced, red: shortage) instead of the thermometer at the right edge.
+The minimap grows with the resolution (300×300 instead of 200×200 in 1920×1200), shows units as larger
+dots, sits on the same kind of panel instead of the wooden frame, and its buttons are scaled with it.
+Saved games stay compatible with the basic fix and the original game.
 
 ### Uninstall
 
@@ -152,7 +155,10 @@ przełączać się w każdej chwili, uruchamiając drugi plik `.cmd`.
 Ten wariant ma też nowoczesny interfejs: mapa zajmuje cały ekran, bez drewnianej ramki, a zasoby są
 na półprzezroczystym pasku u góry: ikony zasobów z gry z ich wartościami, ludność z limitem
 mieszkań (na czerwono, gdy limit jest osiągnięty) i bilans prądu jako wskaźnik (zielony: nadwyżka,
-żółty: równowaga, czerwony: brak) zamiast termometru przy prawej krawędzi.
+żółty: równowaga, czerwony: brak) zamiast termometru przy prawej krawędzi. Minimapa rośnie razem
+z rozdzielczością (300×300 zamiast 200×200 w 1920×1200), pokazuje jednostki większymi kropkami, leży
+na takim samym panelu zamiast drewnianej ramki, a jej przyciski są przeskalowane razem z nią. Zapisy
+gry pozostają zgodne z podstawową poprawką i oryginalną grą.
 
 ### Odinstalowanie
 
