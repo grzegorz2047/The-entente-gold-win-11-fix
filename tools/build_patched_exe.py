@@ -7,6 +7,7 @@
 - Scales the top-bar HUD with the real screen width.
 - Replaces the z-buffer self-copy used while scrolling (units vanished) with a depth clear.
 - Loading a mission keeps the menu's screen size until the mode switch (1440x900 crashed on load).
+- Sizes the cloud-shadow grid from the screen (wider modes had a seam at x ~1312).
 
 usage: python build_patched_exe.py ORIGINAL.exe OUTPUT.exe WxH WxH WxH WxH
 release build: ... 1024x768 1152x720 1280x800 1440x900   (requires: pip install pefile)
@@ -146,6 +147,21 @@ emit(bytes.fromhex(
     '5f'                    # pop edi
     'c3'))                  # ret
 write(0x437ce7, b'\xe8' + d32(zfill - (0x437ce7 + 5)) + b'\x90' * 13)
+
+# The drifting cloud shadows over the map (0x432814, when [0x599965] is set) are a grid of 256x256
+# quads with a fixed 6 columns and 5 rows, starting up to 256 px left of / above the screen: enough
+# for 1280x1024, but wider modes had no cloud shadows right of x ~1312 (a visible vertical seam).
+# Size the grid from the screen: W/256 + 2 columns, H/256 + 2 rows.
+expect(0x4328e5, 'bf06000000')                      # mov edi, 6 (columns)
+expect(0x43291c, 'be05000000')                      # mov esi, 5 (rows, reloaded for every column)
+cols_fn = here()
+emit(b'\x0f\xb7\x3d' + d32(W_ADDR))                 # movzx edi, word [W]
+emit(b'\xc1\xef\x08\x83\xc7\x02\xc3')               # shr edi, 8; add edi, 2; ret
+rows_fn = here()
+emit(b'\x0f\xb7\x35' + d32(H_ADDR))                 # movzx esi, word [H]
+emit(b'\xc1\xee\x08\x83\xc6\x02\xc3')               # shr esi, 8; add esi, 2; ret
+write(0x4328e5, b'\xe8' + d32(cols_fn - (0x4328e5 + 5)))
+write(0x43291c, b'\xe8' + d32(rows_fn - (0x43291c + 5)))
 
 # Per-mode HUD scale (W/1024) used to place the resource counters in the top bar.
 expect(0x595e14, '0000803f0000903f0000a03f0000a03f')
