@@ -1001,15 +1001,15 @@ mm_fog_blit:                              ; the fog overlay (200 x 200) stretche
     call dword ptr [ecx + 0x14]           ; Blt
     ret
 
-mm_div_fy200:                             ; st0 / (fy * 200 / N): minimap pixel on the 200 x 200 fog grid
-    fdiv dword ptr [{MM_FY:#x}]
-    fmul dword ptr [{MM_NF:#x}]
-    fidiv dword ptr [{K200:#x}]
+mm_div_fy200:                             ; st0 / (fy * N / 200) = map y * 200 / map size: row on the 200 x 200
+    fdiv dword ptr [{MM_FY:#x}]           ; fog grid (fy = map size / N)
+    fimul dword ptr [{K200:#x}]
+    fdiv dword ptr [{MM_NF:#x}]
     ret
 mm_div_fx200:
     fdiv dword ptr [{MM_FX:#x}]
-    fmul dword ptr [{MM_NF:#x}]
-    fidiv dword ptr [{K200:#x}]
+    fimul dword ptr [{K200:#x}]
+    fdiv dword ptr [{MM_NF:#x}]
     ret
 
 mm_btn_scale:                             ; end of 0x4e1df0 (button rectangles): scale them by N / 200 from the
