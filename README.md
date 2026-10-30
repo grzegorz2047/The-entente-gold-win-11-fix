@@ -77,7 +77,11 @@ original `Antanta.exe` – just run `Install.cmd` again.
   - an FPS counter in the top-right corner ("FPS 60  max 33 ms": frames per second and the
     longest frame of the last second);
   - buildings no longer turn black after saving or loading from the in-game menu (the dialogs
-    switch the screen mode; the map is now redrawn afterwards).
+    switch the screen mode; the map is now redrawn afterwards);
+  - no freezes when units or buildings appear on screen for the first time: the game loads their
+    graphics only then, and a read from a slow or removable drive could stall it for up to a second.
+    At start a background thread now reads the graphics archives (about 300 MB) into the Windows
+    file cache.
 - Sharp picture with Windows display scaling (125 %, 150 %, 175 %…).
 - Skips the intro video, which hangs on a black screen on modern Windows.
 
@@ -98,8 +102,9 @@ python tools/smooth60.py base.exe smooth.exe
 python tools/text_overlay.py smooth.exe overlay.exe
 python tools/fps_counter.py overlay.exe counter.exe
 python tools/mode_redraw.py counter.exe redraw.exe
-python tools/terrain_strip.py redraw.exe out.exe
-python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch "tools/build_patched_exe.py + smooth60.py + text_overlay.py + fps_counter.py + mode_redraw.py + terrain_strip.py"
+python tools/terrain_strip.py redraw.exe strip.exe
+python tools/prefetch.py strip.exe out.exe
+python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch "tools/build_patched_exe.py + smooth60.py + text_overlay.py + fps_counter.py + mode_redraw.py + terrain_strip.py + prefetch.py"
 
 python tools/build_patched_exe.py Antanta.exe base2.exe 1024x768 1152x720 1280x800 1920x1200
 python tools/smooth60.py base2.exe smooth2.exe
@@ -109,7 +114,8 @@ python tools/mode_redraw.py out2.exe redraw2.exe
 python tools/zoom.py redraw2.exe zoom.exe
 python tools/terrain_strip.py zoom.exe zoom2.exe
 python tools/modern_hud.py zoom2.exe hud.exe
-python tools/make_diff.py Antanta.exe hud.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + mode_redraw.py + zoom.py + terrain_strip.py + modern_hud.py"
+python tools/prefetch.py hud.exe out2.exe
+python tools/make_diff.py Antanta.exe out2.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + mode_redraw.py + zoom.py + terrain_strip.py + modern_hud.py + prefetch.py"
 ```
 
 ---
@@ -190,7 +196,11 @@ oryginalny `Antanta.exe` – wystarczy ponownie uruchomić `Install.cmd`.
   - licznik klatek w prawym górnym rogu („FPS 60  max 33 ms”: klatki na sekundę i najdłuższa
     klatka z ostatniej sekundy);
   - budynki nie robią się czarne po zapisaniu lub wczytaniu gry z menu w trakcie gry (okna
-    zapisu zmieniają tryb ekranu; teraz mapa jest potem rysowana na nowo).
+    zapisu zmieniają tryb ekranu; teraz mapa jest potem rysowana na nowo);
+  - brak przycięć, gdy jednostki lub budynki pierwszy raz pojawiają się na ekranie: gra wczytuje
+    ich grafikę dopiero wtedy, a odczyt z wolnego lub wymiennego dysku potrafił ją zatrzymać nawet na
+    sekundę. Teraz przy starcie wątek w tle wczytuje archiwa grafiki (około 300 MB) do pamięci
+    podręcznej Windows.
 - Ostry obraz przy skalowaniu ekranu w Windows (125 %, 150 %, 175 %…).
 - Pomija film wstępny, który na współczesnym Windows zawiesza się na czarnym ekranie.
 

@@ -1,6 +1,6 @@
 """Modern HUD for The Entente (improvements): no screen frame, a semi-transparent top bar.
 
-Applied last in the improvements chain (after terrain_strip.py). usage: python modern_hud.py IN.exe OUT.exe
+Applied in the improvements chain after terrain_strip.py (prefetch.py follows). usage: python modern_hud.py IN.exe OUT.exe
 
 - The four map bevels (MapBevelUp/Down/Left/Right.bmp, blitted by 0x4e11c0 every frame) are no longer
   drawn, so the map fills the whole screen. The thermometer (the electricity balance on the right edge)
