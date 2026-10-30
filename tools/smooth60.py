@@ -333,18 +333,19 @@ scroll_wait:
     mov eax, {STEP}
 sw_min:
     mov dword ptr [{G_MINSTEP:#x}], eax
-    cmp dword ptr [{G_CAMONLY:#x}], 0     ; learn how long a camera-only iteration takes
+    cmp dword ptr [{G_ITER:#x}], 0        ; learn how long a camera-only iteration takes: the longest
+    jle sw_decayed                      ; recent one, forgotten by 1 ms per scroll iteration
+    dec dword ptr [{G_ITER:#x}]
+sw_decayed:
+    cmp dword ptr [{G_CAMONLY:#x}], 0
     je sw_learned
     mov dword ptr [{G_CAMONLY:#x}], 0
     call ms_since_step
     cmp eax, 100
     jae sw_learned
     cmp eax, dword ptr [{G_ITER:#x}]
-    jle sw_decay
+    jle sw_learned
     mov dword ptr [{G_ITER:#x}], eax
-    jmp sw_learned
-sw_decay:
-    dec dword ptr [{G_ITER:#x}]
 sw_learned:
     call ms_to_step                     ; S: ms until the next camera step
     mov edx, eax

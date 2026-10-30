@@ -55,7 +55,9 @@ $olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27
                    '02f103b91ce6346b6d12a3b7e596992dab25855d4a005bc56e5c56a8c035be3d',   # main after PR #7 (unreleased)
                    '05dbcc4048f094787e1447d7bd27483ace56ba906c996ec75872cc93d54949b3',   # main after PR #7 with improvements
                    '728017e8bfc5132e89460b99e3ab237695ac515789fab6930897e7c626b993f1',   # PR #8 (tips overlay)
-                   'eee2e6d1de2147f65b2da28330f680fdbe7f4f7e3f5f1181cf080c809dac1346')   # PR #8 with improvements
+                   'eee2e6d1de2147f65b2da28330f680fdbe7f4f7e3f5f1181cf080c809dac1346',   # PR #8 with improvements
+                   '13ef3a69307fcf0c930ebd010a21c69f75c4516be688adecbb03eb1c2bb95c36',   # PR #9 (scroll pace)
+                   '274ba786b18062a682c9c84f58ca869f3eb4bfdf9e50b2632d66eb8c14ac402a')   # PR #9 with improvements
 # switching between the basic fix and the one with improvements also starts from the original
 $olderReleases += @($basic.Header['target-sha256'], $withZoom.Header['target-sha256']) | Where-Object { $_ -ne $header['target-sha256'] }
 $savedOrig = Join-Path $backup $GameExe
