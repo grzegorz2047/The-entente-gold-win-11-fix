@@ -9,6 +9,12 @@ $DgVoodooUrl = 'https://github.com/dege-diosg/dgVoodoo2/releases/download/2.87.6
 $DgVoodooSha256 = '9afa493396feec7108f42a2d97661eef96bbaac5addf0dfb5cfbc3001cd76a0a'
 $Resolutions = '1152x720, 1280x800, 1440x900'   # extra modes added by the exe patch (index 1..3)
 $DefaultMode = 2                                # 1280x800
+if ($Improvements) {
+    # the map is drawn in 1920x1200 so that it can be zoomed out; it starts zoomed to the 1280x800 view
+    $Resolutions = '1152x720, 1280x800, 1920x1200'
+    $DefaultMode = 3
+}
+$ModeList = '1024x768, ' + $Resolutions
 
 Write-Host ''
 Write-Host '  The Entente Gold - poprawka dla Windows 10/11 / Windows 10/11 fix' -ForegroundColor Cyan
@@ -150,9 +156,10 @@ if (Test-Path $videoInf) {
 
 Write-Host ''
 Say 'GOTOWE! Uruchom gre normalnie ze Steama.' 'DONE! Start the game from Steam as usual.' 'Green'
-Say 'Rozdzielczosc zmienisz w Opcjach (przytrzymaj przycisk zmiany): 1024x768, 1152x720, 1280x800, 1440x900.' `
-    'Change resolution in Options (hold the change button): 1024x768, 1152x720, 1280x800, 1440x900.'
+Say "Rozdzielczosc zmienisz w Opcjach (przytrzymaj przycisk zmiany): $ModeList." `
+    "Change resolution in Options (hold the change button): $ModeList."
 if ($Improvements) {
-    Say 'Ulepszenia: kolko myszy przybliza i oddala mape (do 2,5x).' 'Improvements: the mouse wheel zooms the map in and out (up to 2.5x).'
+    Say 'Ulepszenia: kolko myszy oddala mape (do 1,5x szerszego widoku) i przybliza ja (do 2,5x).' `
+        'Improvements: the mouse wheel zooms the map out (up to a 1.5x wider view) and in (up to 2.5x).'
 }
 Write-Host ''
