@@ -6,6 +6,7 @@
   reproduce the original constants exactly.
 - Scales the top-bar HUD with the real screen width.
 - Replaces the z-buffer self-copy used while scrolling (units vanished) with a depth clear.
+- Loading a mission keeps the menu's screen size until the mode switch (1440x900 crashed on load).
 
 usage: python build_patched_exe.py ORIGINAL.exe OUTPUT.exe WxH WxH WxH WxH
 release build: ... 1024x768 1152x720 1280x800 1440x900   (requires: pip install pefile)
@@ -77,9 +78,16 @@ def stub_direct(w, h, cont):
     emit(jmp_from(here(), cont))
     return start
 
-for table, cont, mk in ((0x4204ec, 0x42025f, stub_ax), (0x42199c, 0x42190f, stub_ax), (0x4f3bd4, 0x4f3b36, stub_direct)):
+for table, cont, mk in ((0x4204ec, 0x42025f, stub_ax), (0x42199c, 0x42190f, stub_ax)):
     entries = [mk(w, h, cont) for (w, h) in modes]
     write(table, b''.join(d32(e) for e in entries))
+
+# Setter C runs when a mission is loaded: it set the mission's screen size, then the map is loaded and
+# drawn (0x427650), and only then the mode switch (0x42bb20 at 0x4f3b81) sets the size again and
+# recreates the surfaces. In between the map was drawn with the mission's size into the menu-sized
+# (1024x768) back buffer and z-buffer: a crash at 0x42d5b5 / 0x42efeb in modes wider than 1280.
+# Leave the size to the mode switch (it also recomputes the tile counts).
+write(0x4f3bd4, b''.join(d32(0x4f3b36) for _ in modes))
 
 # Tile-count fn 1 (0x431be0): [0x8be38e] = ceil(W/96), [0x8be38c] = floor(H/24) + 2.
 f1 = here()
