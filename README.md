@@ -27,6 +27,18 @@ In the game, open **Options** and **press and hold** the resolution button. Avai
 1024×768 (original), 1152×720, 1280×800 (default), 1440×900. The image keeps its proportions
 on any monitor; on 16:9 screens there are thin black bars at the sides.
 
+### Improvements: zoom with the mouse wheel (optional)
+
+Instead of `Install.cmd`, double-click **`Install-Improvements.cmd`**. In addition to the fix, the
+mouse wheel then zooms the map smoothly: out, to a view 1.5× wider than usual, and in, up to 2.5×.
+The game starts with the usual view. Clicks and selection work on the zoomed map, and the minimap
+frame shows the visible area.
+
+To make zooming out possible, the game runs in 1920×1200 in this variant, so the interface (top
+bar, panels, minimap) is about a third smaller than with the basic fix. Zooming in enlarges the
+original graphics, so close up they are less sharp. You can switch between the two variants at any
+time by running the other `.cmd` file.
+
 ### Uninstall
 
 Double-click **`Uninstall.cmd`**. All original game files are restored.
@@ -72,6 +84,13 @@ python tools/smooth60.py base.exe smooth.exe
 python tools/text_overlay.py smooth.exe overlay.exe
 python tools/fps_counter.py overlay.exe out.exe
 python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch
+
+python tools/build_patched_exe.py Antanta.exe base2.exe 1024x768 1152x720 1280x800 1920x1200
+python tools/smooth60.py base2.exe smooth2.exe
+python tools/text_overlay.py smooth2.exe overlay2.exe
+python tools/fps_counter.py overlay2.exe out2.exe
+python tools/zoom.py out2.exe zoom.exe
+python tools/make_diff.py Antanta.exe zoom.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + zoom.py"
 ```
 
 ---
@@ -101,6 +120,18 @@ gry (tego z plikiem `Antanta.exe`). Potrzebny jest jednorazowo internet do pobra
 W grze wejdź w **Opcje** i **przytrzymaj** przycisk zmiany rozdzielczości. Do wyboru:
 1024×768 (oryginalna), 1152×720, 1280×800 (domyślna), 1440×900. Obraz zachowuje proporcje na
 każdym monitorze; na ekranach 16:9 po bokach są wąskie czarne pasy.
+
+### Ulepszenia: zoom kółkiem myszy (opcjonalne)
+
+Zamiast `Install.cmd` kliknij dwukrotnie **`Install-Improvements.cmd`**. Oprócz poprawki kółko myszy
+płynnie oddala mapę (do widoku 1,5× szerszego niż zwykle) i przybliża ją (do 2,5×). Gra startuje
+ze zwykłym widokiem. Klikanie i zaznaczanie działają na przybliżonej mapie, a ramka na minimapie
+pokazuje widoczny obszar.
+
+Żeby dało się oddalać, w tym wariancie gra działa w rozdzielczości 1920×1200, więc interfejs (górny
+pasek, panele, minimapa) jest o około jedną trzecią mniejszy niż w podstawowej poprawce.
+Przybliżenie powiększa oryginalną grafikę, więc z bliska jest mniej ostra. Między wariantami można
+przełączać się w każdej chwili, uruchamiając drugi plik `.cmd`.
 
 ### Odinstalowanie
 

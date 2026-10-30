@@ -1,6 +1,7 @@
 # Installs the Windows 10/11 fix for The Entente Gold (Steam).
-# Started by Install.cmd; can also be run as: install.ps1 [-GameDir "<folder with Antanta.exe>"]
-param([string]$GameDir)
+# Started by Install.cmd (or Install-Improvements.cmd, which adds -Improvements: mouse-wheel zoom);
+# can also be run as: install.ps1 [-GameDir "<folder with Antanta.exe>"] [-Improvements]
+param([string]$GameDir, [switch]$Improvements)
 
 . (Join-Path $PSScriptRoot 'common.ps1')
 
@@ -8,6 +9,12 @@ $DgVoodooUrl = 'https://github.com/dege-diosg/dgVoodoo2/releases/download/2.87.6
 $DgVoodooSha256 = '9afa493396feec7108f42a2d97661eef96bbaac5addf0dfb5cfbc3001cd76a0a'
 $Resolutions = '1152x720, 1280x800, 1440x900'   # extra modes added by the exe patch (index 1..3)
 $DefaultMode = 2                                # 1280x800
+if ($Improvements) {
+    # the map is drawn in 1920x1200 so that it can be zoomed out; it starts zoomed to the 1280x800 view
+    $Resolutions = '1152x720, 1280x800, 1920x1200'
+    $DefaultMode = 3
+}
+$ModeList = '1024x768, ' + $Resolutions
 
 Write-Host ''
 Write-Host '  The Entente Gold - poprawka dla Windows 10/11 / Windows 10/11 fix' -ForegroundColor Cyan
@@ -22,10 +29,16 @@ $firstInstall = -not (Test-Path $backup)
 New-Item -ItemType Directory -Force $backup | Out-Null
 
 # 1. Antanta.exe ----------------------------------------------------------------------------
-$patchFile = Join-Path $PSScriptRoot 'antanta.patch'
-$patchLines = Get-Content $patchFile | Where-Object { $_ -and -not $_.StartsWith('#') }
-$header = @{}
-foreach ($l in $patchLines | Select-Object -First 3) { $k, $v = $l -split ' ', 2; $header[$k] = $v }
+function Read-Patch($name) {
+    $lines = @(Get-Content (Join-Path $PSScriptRoot $name) | Where-Object { $_ -and -not $_.StartsWith('#') })
+    $head = @{}
+    foreach ($l in $lines | Select-Object -First 3) { $k, $v = $l -split ' ', 2; $head[$k] = $v }
+    @{ Lines = $lines; Header = $head }
+}
+$basic = Read-Patch 'antanta.patch'
+$withZoom = Read-Patch 'antanta-improvements.patch'
+$chosen = if ($Improvements) { $withZoom } else { $basic }
+$patchLines, $header = $chosen.Lines, $chosen.Header
 $exe = Join-Path $GameDir $GameExe
 $hash = Get-Sha256 $exe
 # Antanta.exe patched by an older release of this fix: start again from the backed-up original.
@@ -34,7 +47,11 @@ $olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27
                    '0a27c9df159ff9b38f07275ea19ae92983f63983cb86082139d981a1a5d209ae',   # v1.2.0 pre-release build
                    '9e43eaf544d6521ce72d8038c96e6827670cd8129949acc50d738c16c2b64064',   # v1.2.0 pre-release build 2
                    'd4f55e2357d9df8293f3d24acd550c5118322e0ba31a64f3c15511ed4243c837',   # v1.2.0
-                   '7f8255f7b388eb4ecdf9ac2e97eee3edf3fd76bec4809c337b994fd0e8d6eef1')   # main after PR #4 (unreleased)
+                   '7f8255f7b388eb4ecdf9ac2e97eee3edf3fd76bec4809c337b994fd0e8d6eef1',   # main after PR #4 (unreleased)
+                   'de66192cd204e5ee9fd540ac475ee7c855f1ec0511f2f7a684cad00a8cb9008b',   # 1440x900 load fix, first build
+                   '1190c8b507c4cd38a2e60f1c6a18609a156bca60bb91b1a33432f3754c082f7f')   # improvements, first build (zoom in only)
+# switching between the basic fix and the one with improvements also starts from the original
+$olderReleases += @($basic.Header['target-sha256'], $withZoom.Header['target-sha256']) | Where-Object { $_ -ne $header['target-sha256'] }
 $savedOrig = Join-Path $backup $GameExe
 if ($olderReleases -contains $hash -and (Test-Path $savedOrig) -and (Get-Sha256 $savedOrig) -eq $header['source-sha256']) {
     Copy-Item $savedOrig $exe -Force
@@ -139,6 +156,10 @@ if (Test-Path $videoInf) {
 
 Write-Host ''
 Say 'GOTOWE! Uruchom gre normalnie ze Steama.' 'DONE! Start the game from Steam as usual.' 'Green'
-Say 'Rozdzielczosc zmienisz w Opcjach (przytrzymaj przycisk zmiany): 1024x768, 1152x720, 1280x800, 1440x900.' `
-    'Change resolution in Options (hold the change button): 1024x768, 1152x720, 1280x800, 1440x900.'
+Say "Rozdzielczosc zmienisz w Opcjach (przytrzymaj przycisk zmiany): $ModeList." `
+    "Change resolution in Options (hold the change button): $ModeList."
+if ($Improvements) {
+    Say 'Ulepszenia: kolko myszy oddala mape (do 1,5x szerszego widoku) i przybliza ja (do 2,5x).' `
+        'Improvements: the mouse wheel zooms the map out (up to a 1.5x wider view) and in (up to 2.5x).'
+}
 Write-Host ''
