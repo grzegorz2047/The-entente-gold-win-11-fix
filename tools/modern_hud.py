@@ -50,10 +50,10 @@ THERMOMETER = [(0x4e13a4, 'ff521c'), (0x4e13c4, 'ff5214')]   # BltFast of the sc
 for va, hexbytes in BEVEL_BLTS + THERMOMETER:
     expect(va, hexbytes)
 
-relocs = pe.OPTIONAL_HEADER.DATA_DIRECTORY[5]
-CODE = B + relocs.VirtualAddress
-CODE_END = CODE + relocs.Size
-assert relocs.Size and pe.OPTIONAL_HEADER.DllCharacteristics & 0x40 == 0, 'relocations needed'
+RELOC_VA, RELOC_SIZE = 0x9cb000, 0x12bc0          # the relocation table of the Steam exe
+CODE = RELOC_VA
+CODE_END = RELOC_VA + RELOC_SIZE - 0x100          # mode_redraw.py uses the last 0x100 bytes
+assert pe.OPTIONAL_HEADER.DllCharacteristics & 0x40 == 0, 'relocations needed'
 DATA = CODE + 0x1000                              # code before it, the old table's bytes after it stay unused
 G = lambda i: DATA + 4 * i
 (G_INIT, G_FONT, G_FONTSYM, G_FH, P_STRETCHDIB, P_SETSTRETCH, G_ICONS_DONE, G_TMP) = (G(i) for i in range(8))
