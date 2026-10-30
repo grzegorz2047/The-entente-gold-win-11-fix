@@ -8,7 +8,10 @@ stall: one 216 KB read took 0.9 s (Junkers_J1.les, market save, scrolling across
 At its first main loop iteration the game now starts a thread with background priority (low CPU and
 I/O priority) that reads every .les file under Data\\ (283 MB in the Steam version) once, so that the
 loads in the game come from memory.
-The code lives in the old relocation table, between modern_hud.py's area and mode_redraw.py's.
+The code and the 64 KB read buffer live in the old relocation table, between modern_hud.py's area and
+mode_redraw.py's. The buffer is not allocated: a VirtualAlloc of it changed where the game's later
+allocations land, and with that the buildings came out black after saving from the in-game menu in
+about half of the tests (the black buildings of mode_redraw.py, which its redraws then did not fix).
 """
 import struct, sys
 import pefile
@@ -34,9 +37,9 @@ CODE = RELOC_VA + RELOC_SIZE - 0x900              # mode_redraw.py: the last 0x1
 DATA = CODE + 0x400
 assert CODE >= RELOC_VA + 0x1600                  # modern_hud.py: up to there
 GetModuleHandleA, GetProcAddress = 0x9c88b8, 0x9c8924
-FUNCS = ['CreateThread', 'SetThreadPriority', 'SetThreadInformation', 'VirtualAlloc', 'FindFirstFileA',
-         'FindNextFileA', 'FindClose', 'CreateFileA', 'ReadFile', 'CloseHandle']
-G_ONCE, G_BUF, G_GOT, G_MEMPRIO = DATA, DATA + 4, DATA + 8, DATA + 0xc
+FUNCS = ['CreateThread', 'SetThreadPriority', 'SetThreadInformation', 'FindFirstFileA', 'FindNextFileA',
+         'FindClose', 'CreateFileA', 'ReadFile', 'CloseHandle']
+G_ONCE, G_GOT, G_MEMPRIO = DATA, DATA + 8, DATA + 0xc
 P = {name: DATA + 0x10 + 4 * i for i, name in enumerate(FUNCS)}
 STR = DATA + 0x40
 strings, s_at, a = [b'KERNEL32.dll'] + [f.encode() for f in FUNCS], [], STR
@@ -47,6 +50,8 @@ PATH_MAX = 0x200
 DATA_END = PATH + PATH_MAX
 assert DATA_END <= RELOC_VA + RELOC_SIZE - 0x100
 BLOCK = 0x10000
+BUF = RELOC_VA + 0x2000                           # the read buffer, after modern_hud.py's area
+assert BUF + BLOCK <= CODE
 
 def source(thread):
     return f'''
@@ -91,20 +96,11 @@ pf_thread:                                ; read Data\\**\\*.les once, with back
     push -2
     call eax
 pt_memprio:
-    push 4                               ; PAGE_READWRITE
-    push 0x3000                           ; MEM_COMMIT | MEM_RESERVE
-    push {BLOCK:#x}
-    push 0
-    call dword ptr [{P['VirtualAlloc']:#x}]
-    mov dword ptr [{G_BUF:#x}], eax
-    test eax, eax
-    je pt_done
     mov dword ptr [{PATH:#x}], 0x61746144 ; "Data\\"
     mov byte ptr [{PATH + 4:#x}], 0x5c
     push 5
     call walk
     add esp, 4
-pt_done:
     xor eax, eax
     ret 4
 
@@ -188,7 +184,7 @@ rd_block:
     push 0
     push {G_GOT:#x}
     push {BLOCK:#x}
-    push dword ptr [{G_BUF:#x}]
+    push {BUF:#x}
     push edi
     call dword ptr [{P['ReadFile']:#x}]
     test eax, eax
