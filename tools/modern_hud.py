@@ -16,7 +16,9 @@ Applied last in the improvements chain (after terrain_strip.py). usage: python m
   shown with the housing limit ("721/800", red when the limit is reached). The icons are read from
   Interface.les once, while the game loads the HUD bitmaps (0x4e0640, the archive is open then).
 - The FPS counter of fps_counter.py moves into the band (transparent background).
-- Sizes follow the screen height: font max(13, H * 17 / 1200) px, band 11 px taller.
+- Sizes follow the screen height: font max(14, H * 22 / 1200) px (22 in 1920x1200), icons 4/3 of it,
+  the band 8 px taller than the icons. The game's "build more houses" message at the top left moves
+  below the band.
 The game is loaded at its preferred base (no ASLR flag), so its base relocations are never applied;
 the code and data live where the relocation table was (0x9cb000), and the table is dropped.
 """
@@ -42,6 +44,7 @@ if data[off(0x44506d)] != 0xe8:                   # fps_counter.py applied (its 
 expect(0x42b4ee, call(0x42b4ee, 0x4018e3).hex())   # call 0x4e11c0 (map bevels, thermometer, buttons)
 expect(0x444e41, 'a1c08e9900')                    # resource bar after GetDC: mov eax, [0x998ec0] (font)
 expect(0x4e0640, call(0x4e0640, 0x4042dc).hex())   # free the Econom+.bmp data (Interface.les is open)
+expect(0x4450c7, '6a166a1e')                      # "build more houses" queued at y 0x16, x 0x1e
 BEVEL_BLTS = [(0x4e1201, 'ff5114'), (0x4e1237, 'ff5114'), (0x4e1276, 'ff5214'), (0x4e12bd, 'ff5214')]
 THERMOMETER = [(0x4e13a4, 'ff521c'), (0x4e13c4, 'ff5214')]   # BltFast of the scale, colour fill of the level
 for va, hexbytes in BEVEL_BLTS + THERMOMETER:
@@ -89,6 +92,7 @@ DeleteObject, SelectObject, TextOutW, SetTextColor, SetBkMode, CreateFontA, GetT
     0x9c8764, 0x9c8768, 0x9c8770, 0x9c8778, 0x9c8780, 0x9c8790, 0x9c8798)
 W, H, DEVICE, PLAYER, PLAYERS = 0x5ae24e, 0x5ae24c, 0x5ae1f0, 0x5ceb02, 0x9a5994
 FTOL = 0x55be00
+FONT_PER_1200, FONT_MIN = 22, 14                   # font height: px per 1200 px of screen height, minimum
 VALUE_RGB, LIMIT_RGB = 0xf0f0f0, 0x5050ff          # COLORREF (0x00bbggrr)
 BAND_TOP, BAND_BOTTOM, EDGE = 0xb40c1016, 0x8c0c1016, 0x50d0b070   # ARGB
 
@@ -146,8 +150,9 @@ hr_item:
     je hr_noicon
     call draw_icon
 hr_noicon:
-    mov eax, dword ptr [{G_ICON:#x}]
-    add eax, 5
+    mov eax, dword ptr [{G_FHN:#x}]
+    shr eax, 2
+    add eax, dword ptr [{G_ICON:#x}]
     add dword ptr [{G_X:#x}], eax
     mov edi, {TXT:#x}
     cmp esi, 5
@@ -285,21 +290,24 @@ uk_next:
     popal
     ret
 
-layout:                                   ; font height, band height and icon size from the screen height
+layout:                                   ; font height, icon size and band height from the screen height
     movzx eax, word ptr [{H:#x}]
-    imul eax, eax, 17
+    imul eax, eax, {FONT_PER_1200}
     xor edx, edx
     mov ecx, 1200
     div ecx
-    cmp eax, 13
+    cmp eax, {FONT_MIN}
     jge ly_min
-    mov eax, 13
+    mov eax, {FONT_MIN}
 ly_min:
     mov dword ptr [{G_FHN:#x}], eax
-    lea ecx, [eax + 11]
-    mov dword ptr [{G_BAR:#x}], ecx
-    lea ecx, [eax + 5]
-    mov dword ptr [{G_ICON:#x}], ecx
+    shl eax, 2
+    xor edx, edx
+    mov ecx, 3
+    div ecx
+    mov dword ptr [{G_ICON:#x}], eax      ; 4/3 of the font height
+    add eax, 8
+    mov dword ptr [{G_BAR:#x}], eax
     ret
 
 ensure_init:
@@ -774,15 +782,18 @@ data[off(0x4e0640):off(0x4e0640) + 5] = call(0x4e0640, hud_icons)
 for va, _ in BEVEL_BLTS + THERMOMETER:            # call [reg + n] -> add esp, 0x18 (the 6 pushed arguments)
     data[off(va):off(va) + 3] = bytes.fromhex('83c418')
 
-# fps_counter.py: its text on the band (y 3), without the black box
+# fps_counter.py: its text on the band (x W - 280 for the larger font, y 4), without the black box
 fps_mode = bytes.fromhex('6a0255ff1580879c00')    # push 2 (OPAQUE); push ebp; call [SetBkMode]
 fps_pos = bytes.fromhex('6a185655ff1584879c00')   # push 24 (y); push esi; push ebp; call [TextOutA]
-for pat, at, new in ((fps_mode, 1, 1), (fps_pos, 1, 3)):
+fps_x = bytes.fromhex('0fb7354ee25a0081eec8000000')   # movzx esi, word [W]; sub esi, 200 (x)
+for pat, at, new in ((fps_mode, 1, b'\x01'), (fps_pos, 1, b'\x04'), (fps_x, 9, struct.pack('<I', 280))):
     i = data.find(pat)
     assert i > 0 and data.find(pat, i + 1) < 0, pat.hex()
-    data[i + at] = new
+    data[i + at:i + at + len(new)] = new
 
 dd = pe.OPTIONAL_HEADER.get_file_offset() + 96 + 8 * 5   # the base relocation directory: none
 struct.pack_into('<2I', data, dd, 0, 0)
+fh = max(FONT_MIN, FONT_PER_1200)                 # the message goes below the band of 1920x1200 (the tallest)
+data[off(0x4450c7) + 1] = fh * 4 // 3 + 8 + 6
 open(dst, 'wb').write(data)
 print(f'code {len(code)} bytes at {CODE:#x}, data {DATA:#x}-{DATA_END:#x}')

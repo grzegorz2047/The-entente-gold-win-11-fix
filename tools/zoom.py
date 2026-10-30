@@ -7,7 +7,9 @@ The frame renderer 0x42b1d0 draws the whole map view into the back buffer first 
 finished map picture, so it does not matter how the game composes it (Direct3D sprites, depth
 written by the CPU, the terrain kept between frames):
 - The mouse thread (0x4224b0) reads buffered DirectInput events and ignored the wheel (offset 8).
-  It now adds the wheel delta to a counter.
+  It now adds the wheel delta to a counter. The + and - keys (numeric keypad or main keyboard, which
+  the game does not use) count as one notch when pressed, repeated every 120 ms after 350 ms held;
+  they are read with GetKeyState in the render thread, so only while the game has the focus.
 - 0x42b24a / 0x42b250 load the cursor position used to compute the map position under the cursor
   ([0x998ecc], [0x998ec8]: clicks, selection, the tile under the cursor). There the counter is turned
   into a target zoom (15 % per notch), the zoom moves a fifth of the way to the target
@@ -58,6 +60,9 @@ assert DESC + 0x7c <= 0xa0cc00
 CUR_X, CUR_Y, W, H, BACK, DDRAW = 0x5ae2a0, 0x5ae29c, 0x5ae24e, 0x5ae24c, 0x5ae258, 0x5ae250
 COLS, ROWS, CAM_X, CAM_Y = 0x8be38e, 0x8be38c, 0x599954, 0x599956
 G_ZMAX = D + 0x34
+G_KDIR, G_KNEXT = D + 0x38, D + 0x3c            # zoom key held (+120 / -120 / 0), time of its next notch
+GetKeyState, timeGetTime = 0x9c8a54, 0x9c8ae0
+KEY_DELAY, KEY_REPEAT = 350, 120                 # ms: first repeat of a held zoom key, then every
 ONE, STEP, EASE, SNAP = 0x3f800000, 0x3f933333, 0x3e4ccccd, 0x3b03126f       # 1, 1.15, 0.2, 0.002
 PER_MAX, PER_START = 0x3b000000, 0x3a4ccccd                                   # 1/512, 1/1280
 
@@ -132,6 +137,7 @@ zu_start:
 zu_init_done:
     xor eax, eax
     xchg dword ptr [{G_WHEEL:#x}], eax
+    call zoom_keys
     fld dword ptr [{G_TARGET:#x}]
 zu_in:
     cmp eax, 60
@@ -174,6 +180,58 @@ zu_ease:
     fmul dword ptr [k_ease]
     fadd dword ptr [{G_ZOOM:#x}]
     fstp dword ptr [{G_ZOOM:#x}]
+    ret
+
+zoom_keys:                              ; eax = wheel delta; + / - add a notch, repeated while held
+    push eax
+    push 0x6b                           ; VK_ADD
+    call dword ptr [{GetKeyState:#x}]
+    test ax, ax
+    js zk_in
+    mov ecx, 0xbb                       ; VK_OEM_PLUS (keystone would sign-extend push 0xbb)
+    push ecx
+    call dword ptr [{GetKeyState:#x}]
+    test ax, ax
+    js zk_in
+    push 0x6d                           ; VK_SUBTRACT
+    call dword ptr [{GetKeyState:#x}]
+    test ax, ax
+    js zk_out
+    mov ecx, 0xbd                       ; VK_OEM_MINUS
+    push ecx
+    call dword ptr [{GetKeyState:#x}]
+    test ax, ax
+    js zk_out
+    mov dword ptr [{G_KDIR:#x}], 0
+    pop eax
+    ret
+zk_in:
+    mov ecx, 120
+    jmp zk_held
+zk_out:
+    mov ecx, -120
+zk_held:
+    push ecx
+    call dword ptr [{timeGetTime:#x}]
+    pop ecx
+    cmp ecx, dword ptr [{G_KDIR:#x}]
+    je zk_repeat
+    mov dword ptr [{G_KDIR:#x}], ecx    ; pressed: a notch now, the next one after the repeat delay
+    add eax, {KEY_DELAY}
+    mov dword ptr [{G_KNEXT:#x}], eax
+    jmp zk_notch
+zk_repeat:
+    mov edx, eax
+    sub edx, dword ptr [{G_KNEXT:#x}]
+    js zk_none
+    add eax, {KEY_REPEAT}
+    mov dword ptr [{G_KNEXT:#x}], eax
+zk_notch:
+    pop eax
+    add eax, ecx
+    ret
+zk_none:
+    pop eax
     ret
 
 src_axis:
