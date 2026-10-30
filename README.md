@@ -31,11 +31,13 @@ on any monitor; on 16:9 screens there are thin black bars at the sides.
 
 Instead of `Install.cmd`, double-click **`Install-Improvements.cmd`**. In addition to the fix, the
 mouse wheel then zooms the map smoothly: out, to a view 1.5× wider than usual, and in, up to 2.5×.
+The **+** and **-** keys zoom as well (main keyboard or numeric keypad; hold to keep zooming).
 The game starts with the usual view. Clicks and selection work on the zoomed map, and the minimap
 frame shows the visible area.
 
-To make zooming out possible, the game runs in 1920×1200 in this variant, so the interface (top
-bar, panels, minimap) is about a third smaller than with the basic fix. Zooming in enlarges the
+To make zooming out possible, the game runs in 1920×1200 in this variant, so the game's panels and
+the minimap are about a third smaller than with the basic fix (the new top bar scales with the
+resolution). Zooming in enlarges the
 original graphics, so close up they are less sharp. You can switch between the two variants at any
 time by running the other `.cmd` file.
 
@@ -132,12 +134,14 @@ każdym monitorze; na ekranach 16:9 po bokach są wąskie czarne pasy.
 ### Ulepszenia: zoom kółkiem myszy (opcjonalne)
 
 Zamiast `Install.cmd` kliknij dwukrotnie **`Install-Improvements.cmd`**. Oprócz poprawki kółko myszy
-płynnie oddala mapę (do widoku 1,5× szerszego niż zwykle) i przybliża ją (do 2,5×). Gra startuje
+płynnie oddala mapę (do widoku 1,5× szerszego niż zwykle) i przybliża ją (do 2,5×). Tak samo działają
+klawisze **+** i **-** (na głównej klawiaturze lub numerycznej; przytrzymanie zoomuje dalej). Gra startuje
 ze zwykłym widokiem. Klikanie i zaznaczanie działają na przybliżonej mapie, a ramka na minimapie
 pokazuje widoczny obszar.
 
-Żeby dało się oddalać, w tym wariancie gra działa w rozdzielczości 1920×1200, więc interfejs (górny
-pasek, panele, minimapa) jest o około jedną trzecią mniejszy niż w podstawowej poprawce.
+Żeby dało się oddalać, w tym wariancie gra działa w rozdzielczości 1920×1200, więc panele gry
+i minimapa są o około jedną trzecią mniejsze niż w podstawowej poprawce (nowy górny pasek skaluje
+się z rozdzielczością).
 Przybliżenie powiększa oryginalną grafikę, więc z bliska jest mniej ostra. Między wariantami można
 przełączać się w każdej chwili, uruchamiając drugi plik `.cmd`.
 
