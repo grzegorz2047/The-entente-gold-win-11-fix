@@ -1,6 +1,7 @@
 # Installs the Windows 10/11 fix for The Entente Gold (Steam).
-# Started by Install.cmd; can also be run as: install.ps1 [-GameDir "<folder with Antanta.exe>"]
-param([string]$GameDir)
+# Started by Install.cmd (or Install-Improvements.cmd, which adds -Improvements: mouse-wheel zoom);
+# can also be run as: install.ps1 [-GameDir "<folder with Antanta.exe>"] [-Improvements]
+param([string]$GameDir, [switch]$Improvements)
 
 . (Join-Path $PSScriptRoot 'common.ps1')
 
@@ -22,10 +23,16 @@ $firstInstall = -not (Test-Path $backup)
 New-Item -ItemType Directory -Force $backup | Out-Null
 
 # 1. Antanta.exe ----------------------------------------------------------------------------
-$patchFile = Join-Path $PSScriptRoot 'antanta.patch'
-$patchLines = Get-Content $patchFile | Where-Object { $_ -and -not $_.StartsWith('#') }
-$header = @{}
-foreach ($l in $patchLines | Select-Object -First 3) { $k, $v = $l -split ' ', 2; $header[$k] = $v }
+function Read-Patch($name) {
+    $lines = @(Get-Content (Join-Path $PSScriptRoot $name) | Where-Object { $_ -and -not $_.StartsWith('#') })
+    $head = @{}
+    foreach ($l in $lines | Select-Object -First 3) { $k, $v = $l -split ' ', 2; $head[$k] = $v }
+    @{ Lines = $lines; Header = $head }
+}
+$basic = Read-Patch 'antanta.patch'
+$withZoom = Read-Patch 'antanta-improvements.patch'
+$chosen = if ($Improvements) { $withZoom } else { $basic }
+$patchLines, $header = $chosen.Lines, $chosen.Header
 $exe = Join-Path $GameDir $GameExe
 $hash = Get-Sha256 $exe
 # Antanta.exe patched by an older release of this fix: start again from the backed-up original.
@@ -35,6 +42,8 @@ $olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27
                    '9e43eaf544d6521ce72d8038c96e6827670cd8129949acc50d738c16c2b64064',   # v1.2.0 pre-release build 2
                    'd4f55e2357d9df8293f3d24acd550c5118322e0ba31a64f3c15511ed4243c837',   # v1.2.0
                    '7f8255f7b388eb4ecdf9ac2e97eee3edf3fd76bec4809c337b994fd0e8d6eef1')   # main after PR #4 (unreleased)
+# switching between the basic fix and the one with improvements also starts from the original
+$olderReleases += @($basic.Header['target-sha256'], $withZoom.Header['target-sha256']) | Where-Object { $_ -ne $header['target-sha256'] }
 $savedOrig = Join-Path $backup $GameExe
 if ($olderReleases -contains $hash -and (Test-Path $savedOrig) -and (Get-Sha256 $savedOrig) -eq $header['source-sha256']) {
     Copy-Item $savedOrig $exe -Force
@@ -141,4 +150,7 @@ Write-Host ''
 Say 'GOTOWE! Uruchom gre normalnie ze Steama.' 'DONE! Start the game from Steam as usual.' 'Green'
 Say 'Rozdzielczosc zmienisz w Opcjach (przytrzymaj przycisk zmiany): 1024x768, 1152x720, 1280x800, 1440x900.' `
     'Change resolution in Options (hold the change button): 1024x768, 1152x720, 1280x800, 1440x900.'
+if ($Improvements) {
+    Say 'Ulepszenia: kolko myszy przybliza i oddala mape (do 2,5x).' 'Improvements: the mouse wheel zooms the map in and out (up to 2.5x).'
+}
 Write-Host ''

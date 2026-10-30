@@ -27,6 +27,14 @@ In the game, open **Options** and **press and hold** the resolution button. Avai
 1024×768 (original), 1152×720, 1280×800 (default), 1440×900. The image keeps its proportions
 on any monitor; on 16:9 screens there are thin black bars at the sides.
 
+### Improvements: zoom with the mouse wheel (optional)
+
+Instead of `Install.cmd`, double-click **`Install-Improvements.cmd`**. In addition to the fix,
+the mouse wheel then zooms the map smoothly in (up to 2.5×) and back out to the normal view. The
+interface keeps its size, clicks and selection work on the zoomed map, and the minimap frame shows
+the zoomed area. Zooming enlarges the original graphics, so close up they are less sharp. You can
+switch between the two variants at any time by running the other `.cmd` file.
+
 ### Uninstall
 
 Double-click **`Uninstall.cmd`**. All original game files are restored.
@@ -72,6 +80,8 @@ python tools/smooth60.py base.exe smooth.exe
 python tools/text_overlay.py smooth.exe overlay.exe
 python tools/fps_counter.py overlay.exe out.exe
 python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch
+python tools/zoom.py out.exe zoom.exe
+python tools/make_diff.py Antanta.exe zoom.exe installer/antanta-improvements.patch "tools/build_patched_exe.py + smooth60.py + text_overlay.py + fps_counter.py + zoom.py"
 ```
 
 ---
@@ -101,6 +111,14 @@ gry (tego z plikiem `Antanta.exe`). Potrzebny jest jednorazowo internet do pobra
 W grze wejdź w **Opcje** i **przytrzymaj** przycisk zmiany rozdzielczości. Do wyboru:
 1024×768 (oryginalna), 1152×720, 1280×800 (domyślna), 1440×900. Obraz zachowuje proporcje na
 każdym monitorze; na ekranach 16:9 po bokach są wąskie czarne pasy.
+
+### Ulepszenia: przybliżanie kółkiem myszy (opcjonalne)
+
+Zamiast `Install.cmd` kliknij dwukrotnie **`Install-Improvements.cmd`**. Oprócz poprawki kółko myszy
+płynnie przybliża mapę (do 2,5×) i oddala ją z powrotem do zwykłego widoku. Interfejs zachowuje swój
+rozmiar, klikanie i zaznaczanie działają na przybliżonej mapie, a ramka na minimapie pokazuje
+przybliżony obszar. Przybliżenie powiększa oryginalną grafikę, więc z bliska jest mniej ostra.
+Między wariantami można przełączać się w każdej chwili, uruchamiając drugi plik `.cmd`.
 
 ### Odinstalowanie
 
