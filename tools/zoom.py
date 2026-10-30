@@ -43,7 +43,8 @@ expect(0x42253f, 'ff2495582e4200')                # jmp [edx*4 + 0x422e58]
 expect(0x42b24a, '8b15a0e25a00')                  # mov edx, [cursor x]
 expect(0x42b250, '8b3d9ce25a00')                  # mov edi, [cursor y]
 expect(0x42b4d7, 'b9985e9a00')                    # mov ecx, 0x9a5e98 (text queue, first interface call)
-expect(0x9e3e50, '60')                            # fps_counter.py applied (pushal at its start)
+if data[off(0x44506d)] != 0xe8:                   # fps_counter.py applied (its call at the resource bar)
+    sys.exit('apply fps_counter.py first')
 
 rdata = next(s for s in pe.sections if s.Name.startswith(b'.rdata'))
 CODE = (B + rdata.VirtualAddress + rdata.Misc_VirtualSize + 15) & ~15
