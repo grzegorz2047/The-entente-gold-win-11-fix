@@ -41,7 +41,8 @@ def expect(va, hexbytes):
         sys.exit(f'unexpected bytes at {va:#x}: {got.hex()}')
 
 expect(0x42b8ce, '803d60e25a0001')                 # cmp byte ptr [0x5ae260], 1  (before Flip / Blt)
-expect(0x9e3580, 'ff15e4889c00')                   # smooth60.py must already be applied
+if data[off(0x46e2d5)] != 0xe8:                   # smooth60.py applied (its call instead of Sleep)
+    sys.exit('apply smooth60.py first')
 
 rsrc = next(s for s in pe.sections if s.Name.startswith(b'.rsrc'))
 CODE = (B + rsrc.VirtualAddress + rsrc.Misc_VirtualSize + 15) & ~15

@@ -8,7 +8,8 @@ default) is over, so it shows ~20 fps. This keeps the logic untouched and only f
   QueryPerformanceCounter timestamp and bumps our tick counter.
 - 0x46e2d5 (Sleep until the next tick) becomes smooth_wait: while more than one frame of the tick
   remains it renders another frame (0x42b1d0, which ends with Flip) instead of sleeping. Only in the
-  map view: not while edge-scrolling, in menus, or in the alternate render path. An extra frame is
+  map view: not in menus or in the alternate render path. While edge-scrolling the iterations between
+  the ticks only move the camera and draw (logic skipped), so the game keeps its pace (see scroll_wait). An extra frame is
   also skipped when less time is left than the last extra frame took, so a slow one (the camera
   being dragged on the minimap redraws the whole terrain) does not stretch the tick.
 - 0x46e289: the loop skipped the wait altogether when the camera was moved by other means than
@@ -52,6 +53,9 @@ N = 4096                                                       # interpolation t
 ENTRY = 40                                                     # key, tick, prev[4 floats], cur[4 floats]
 G_TICK, G_TS, G_QPF, G_NOW, G_TMP, G_ALPHA, G_TIMERRES, G_EXTRA = (DATA + o for o in (0, 8, 16, 24, 32, 40, 48, 56))
 G_LAST = DATA + 64                                             # duration of the last extra frame (ms)
+G_SKIP, G_STEP, G_MINSTEP = DATA + 72, DATA + 80, DATA + 88    # camera-only iteration next; QPC of the last scroll step
+G_NOLOGIC = DATA + 96                                          # set by tick_start for the iteration it starts
+G_CAMONLY, G_ITER = DATA + 100, DATA + 104                     # last iteration moved only the camera; its duration (ms)
 GetModuleHandleA, GetProcAddress = 0x9c88b8, 0x9c8924
 TABLE = DATA + 0x100
 R_TICK = TABLE + N * ENTRY                                     # tooltip replay: tick, count, entries
@@ -67,11 +71,19 @@ assert DATA + DATA_SIZE <= 0xa0cc00, 'overlaps fps_counter.py data at 0xa0cc00'
 
 GetTickCount, Sleep, QPC, QPF = 0x9c88e4, 0x9c8848, 0x9c87e8, 0x9c87f8
 RENDER = 0x42b1d0
+STEP, ITER = 33, 15                                            # ms between camera steps (30 tiles/s), minimum expected step iteration
 POS = 0x1c                                                     # unit position block: 4 floats
 
 asm = f'''
 ; ---------------- tick start: replaces 0x535530 ----------------
 tick_start:
+    cmp dword ptr [{G_SKIP:#x}], 0        ; next iteration only moves the camera: the tick goes on
+    je ts_tick
+    mov dword ptr [{G_SKIP:#x}], 0
+    mov dword ptr [{G_NOLOGIC:#x}], 1
+    jmp dword ptr [{GetTickCount:#x}]
+ts_tick:
+    mov dword ptr [{G_NOLOGIC:#x}], 0
     call dword ptr [{GetTickCount:#x}]
     mov dword ptr [0x9c549c], eax
     push eax
@@ -265,11 +277,13 @@ smooth_wait:
 timer_skip:
     popal
 timer_ok:
-    mov al, byte ptr [0x8be3c4]         ; edge scrolling this tick: the game's own pacing
+    mov dword ptr [{G_EXTRA:#x}], 0
+    mov al, byte ptr [0x8be3c4]         ; edge scrolling: camera steps between the ticks
     cmp al, 1
-    je plain_sleep
+    je scroll_wait
     cmp al, 2
-    je plain_sleep
+    je scroll_wait
+    mov dword ptr [{G_SKIP:#x}], 0
     cmp dword ptr [0x9c2b04], 0         ; menu screens
     jne plain_sleep
     cmp byte ptr [0x998ee1], 0          ; alternate render path
@@ -299,6 +313,124 @@ done_wait:
 plain_sleep:
     jmp dword ptr [{Sleep:#x}]
 
+; ---------------- edge scrolling: camera steps more often than logic ticks ----------------
+; The game moves the camera one tile per main-loop iteration and, while edge scrolling, sleeps only
+; its own scroll delay (100, 40, 20 ... 0 ms as the scroll accelerates), so the logic ran once per
+; camera step: 36-43 ticks/s instead of 19.6, the whole game ran twice as fast while scrolling.
+; Now an iteration whose tick is not due yet only moves the camera and draws (logic 0x4b3770 skipped,
+; the frame counts as an extra frame, the tick start is kept). Steps are at least STEP ms apart (or the
+; game's longer delay), extra frames fill the time in between; a step that would end too close to the
+; tick end is left out, so the logic iteration starts on time.
+scroll_wait:
+    mov dword ptr [{G_SKIP:#x}], 0
+    cmp dword ptr [0x9c2b04], 0
+    jne plain_sleep
+    cmp byte ptr [0x998ee1], 0
+    jne plain_sleep
+    mov eax, dword ptr [esp + 4]        ; the game's scroll delay
+    cmp eax, {STEP}
+    jge sw_min
+    mov eax, {STEP}
+sw_min:
+    mov dword ptr [{G_MINSTEP:#x}], eax
+    cmp dword ptr [{G_CAMONLY:#x}], 0     ; learn how long a camera-only iteration takes
+    je sw_learned
+    mov dword ptr [{G_CAMONLY:#x}], 0
+    call ms_since_step
+    cmp eax, 100
+    jae sw_learned
+    cmp eax, dword ptr [{G_ITER:#x}]
+    jle sw_decay
+    mov dword ptr [{G_ITER:#x}], eax
+    jmp sw_learned
+sw_decay:
+    dec dword ptr [{G_ITER:#x}]
+sw_learned:
+    call ms_to_step                     ; S: ms until the next camera step
+    mov edx, eax
+    call ms_left                        ; L: ms until the tick is due
+    mov ecx, dword ptr [{G_ITER:#x}]
+    cmp ecx, {ITER}
+    jge sw_iter
+    mov ecx, {ITER}
+sw_iter:
+    lea ecx, [edx + ecx + 2]
+    cmp eax, ecx
+    jle sw_wait                         ; the tick comes first: wait for it
+    mov dword ptr [{G_SKIP:#x}], 1      ; camera-only iteration next
+sw_wait:                                ; fill the wait with extra frames, like smooth_wait
+    call sw_remaining
+    cmp eax, 14
+    jl sw_sleep
+    cmp eax, dword ptr [{G_LAST:#x}]
+    jl sw_sleep
+    push eax
+    mov dword ptr [{G_EXTRA:#x}], 1
+    call {RENDER:#x}
+    mov dword ptr [{G_EXTRA:#x}], 0
+    call sw_remaining
+    pop edx
+    sub edx, eax
+    mov dword ptr [{G_LAST:#x}], edx
+    jmp sw_wait
+sw_sleep:
+    test eax, eax
+    jle sw_go
+    push eax
+    call dword ptr [{Sleep:#x}]
+sw_go:
+    push {G_STEP:#x}
+    call dword ptr [{QPC:#x}]
+    ret 4
+
+sw_remaining:                           ; eax = ms until the next iteration should start
+    cmp dword ptr [{G_SKIP:#x}], 0
+    je ms_left
+    call ms_to_step
+    push eax
+    call ms_left                        ; never past the tick
+    pop edx
+    cmp eax, edx
+    jle sr_ret
+    mov eax, edx
+sr_ret:
+    ret
+
+ms_to_step:                             ; eax = G_MINSTEP - ms since the last camera step (>= 0)
+    call ms_since_step
+    test eax, eax
+    js ts_now
+    mov ecx, eax
+    mov eax, dword ptr [{G_MINSTEP:#x}]
+    sub eax, ecx
+    jns tsr
+ts_now:
+    xor eax, eax
+tsr:
+    ret
+
+ms_since_step:                          ; eax = ms since the last camera step (negative: none yet)
+    push {G_NOW:#x}
+    call dword ptr [{QPC:#x}]
+    cmp dword ptr [{G_QPF:#x}], 0
+    je ss_none
+    mov eax, dword ptr [{G_NOW:#x}]
+    mov edx, dword ptr [{G_NOW + 4:#x}]
+    sub eax, dword ptr [{G_STEP:#x}]
+    sbb edx, dword ptr [{G_STEP + 4:#x}]
+    mov dword ptr [{G_TMP:#x}], eax
+    mov dword ptr [{G_TMP + 4:#x}], edx
+    fild qword ptr [{G_TMP:#x}]
+    mov dword ptr [{G_TMP:#x}], 1000
+    fimul dword ptr [{G_TMP:#x}]
+    fild qword ptr [{G_QPF:#x}]
+    fdivp st(1), st(0)
+    fistp dword ptr [{G_TMP:#x}]
+    mov eax, dword ptr [{G_TMP:#x}]        ; overflow (no step yet) reads as 0x80000000
+    ret
+ss_none:
+    mov eax, -1
+    ret
 ms_left:                                ; eax = ms left in this tick
     call elapsed_ms
     fistp dword ptr [{G_TMP:#x}]
@@ -306,6 +438,16 @@ ms_left:                                ; eax = ms left in this tick
     movzx eax, byte ptr [eax + 0x998db0]
     sub eax, dword ptr [{G_TMP:#x}]
     ret
+
+logic_gate:                             ; replaces the call of the logic update 0x4b3770 at 0x46e1ca
+    cmp dword ptr [{G_NOLOGIC:#x}], 0
+    je lg_run
+    mov dword ptr [{G_NOLOGIC:#x}], 0
+    mov dword ptr [{G_CAMONLY:#x}], 1
+    mov dword ptr [{G_EXTRA:#x}], 1     ; camera-only iteration: draw it as an extra frame
+    ret
+lg_run:
+    jmp 0x4038c3
 
 ; ---------------- texts drawn once per tick: replay in the extra frames ----------------
 ; Texts are queued with the method 0x4fdc90 (thiscall on the text object 0x9a5e98, 6 args, ret 0x18;
@@ -459,6 +601,10 @@ patch_branch(b'\xe9', 0x535530, label('tick_start'), 7)
 patch_branch(b'\xe8', 0x46e2d5, label('smooth_wait'), 1)
 expect(0x46e287, '3c027550')                      # cmp al, 2 / jne 0x46e2db (no wait at all)
 data[off(0x46e28a)] = 0x46e2c7 - 0x46e28b         # -> jne 0x46e2c7: wait for the end of the tick
+expect(0x46e2c0, '85c07e17')                      # test eax, eax / jle 0x46e2db: no wait at full scroll speed
+data[off(0x46e2c2):off(0x46e2c2) + 2] = b'\x90\x90'  # smooth_wait paces every scroll step
+expect(0x46e1ca, 'e8f456f9ff')                    # call 0x4038c3 (logic update 0x4b3770)
+patch_branch(b'\xe8', 0x46e1ca, label('logic_gate'))
 patch_branch(b'\xe9', 0x5187f0, label('unit_draw'), 1)
 expect(0x42b242, 'e81660fdff')                   # call 0x40125d (-> 0x4cd870)
 patch_branch(b'\xe8', 0x42b242, label('periodic_job'))
