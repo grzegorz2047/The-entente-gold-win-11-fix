@@ -1,6 +1,6 @@
 """Scrolling The Entente: redraw only the terrain tiles that the scroll uncovers.
 
-Applied last (after fps_counter.py, or after zoom.py for the improvements). usage: python terrain_strip.py IN.exe OUT.exe
+Applied after fps_counter.py (or after zoom.py for the improvements). usage: python terrain_strip.py IN.exe OUT.exe
 
 When the camera moves by a tile, the terrain redraw 0x4379c0 rebuilds the list of all tiles on the
 screen, draws every one of them (a base quad per tile in the loop at 0x438c58 and up to 9 blended
