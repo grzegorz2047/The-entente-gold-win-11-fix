@@ -81,7 +81,6 @@ VAL_OFF = DATA + 0x180
 ICON_NAMES = DATA + 0x1a0
 STR = DATA + 0x1c0
 TXT = DATA + 0x240
-VB = DATA + 0x300                                 # up to 24 vertices of 20 bytes
 (MM_N, MM_N13, MM_NF, MM_INV, MM_PW, MM_F200X, MM_F200Y, K200, K160) = (DATA + 0x500 + 4 * i for i in range(9))
 MM_RECT = DATA + 0x530                             # RECT of the stretched fog overlay
 MM_UITOP, MM_PANEL = DATA + 0x540, DATA + 0x544    # minimap area and panel above the map (scaled 0x2c, 0x24 + 4)
@@ -89,7 +88,14 @@ BTN_RECT = DATA + 0x550                            # destination of a stretched 
 BTN_RECTS = 0x9b0c58                               # the 6 button rectangles of 0x4e1df0
 FOG_SURFACE, BACK = 0x982c70, 0x5ae258
 MISSION_SLOT, HUD_SCALE = 0x5ae245, 0x595e14     # mode of the mission; W / 1024 per mode (build_patched_exe.py)
-DATA_END = DATA + 0x560
+VB = DATA + 0x560                                 # up to 48 vertices of 20 bytes
+BEVEL_VT = VB + 48 * 20                           # vtable of the selection panel's bevels: 0x57fda0 without drawing
+DATA_END = BEVEL_VT + 6 * 4
+SELECTION = 0x9a6334                              # window of the selection panel (bottom left) or 0
+BITMAP_WND_VT = [0x4013e8, 0x401e01, 0x401fdc, 0x401d8e]   # window showing a bitmap (draw +0xc: 0x4f7f70)
+# the bevels (TBevel, RBevel, LBevel, BBevel.bmp, used only there) of the selection panel's two layouts
+SEL_BEVELS = [(0x4cfdac, 'c706'), (0x4cfe0b, 'c706'), (0x4cfe6f, 'c745'), (0x4cfec7, 'c706'), (0x4cff2d, 'c706'),
+              (0x4d01f9, 'c745'), (0x4d025f, 'c707'), (0x4d02b2, 'c706')]
 MM_X, MM_Y, MM_FX, MM_FY = 0x9536ea, 0x9536e8, 0x9536f0, 0x9536ec   # minimap position (words), map tiles per pixel
 assert DATA_END <= CODE_END
 
@@ -814,6 +820,45 @@ mm_frame:                                 ; instead of call 0x43e8d0 (minimap) a
     call add_quad                         ; light left edge
     add esp, 24
     mov dword ptr [{G_NV:#x}], 18
+    mov eax, dword ptr [{SELECTION:#x}]   ; the same panel under the selection panel, if one is shown
+    test eax, eax
+    je mf_draw
+    cmp byte ptr [eax + 0x1a], 0
+    je mf_draw
+    movsx esi, word ptr [eax + 0x20]
+    movsx edx, word ptr [eax + 0x24]
+    lea esi, [esi + edx + 6]              ; right
+    movsx ebp, word ptr [eax + 0x22]
+    sub ebp, 6                            ; top
+    movzx ebx, word ptr [{H:#x}]
+    push {BAND_BOTTOM:#x}
+    push {BAND_TOP:#x}
+    push ebx
+    push esi
+    push ebp
+    push 0
+    call add_quad
+    add esp, 24
+    lea edx, [ebp + 1]
+    push {EDGE:#x}
+    push {EDGE:#x}
+    push edx
+    push esi
+    push ebp
+    push 0
+    call add_quad                         ; light top edge
+    add esp, 24
+    lea edx, [esi - 1]
+    push {EDGE:#x}
+    push {EDGE:#x}
+    push ebx
+    push esi
+    push ebp
+    push edx
+    call add_quad                         ; light right edge
+    add esp, 24
+    add dword ptr [{G_NV:#x}], 18
+mf_draw:
     call draw_vb
 mf_done:
     popal
@@ -1052,17 +1097,21 @@ md_done:
     mov ecx, dword ptr [esp + 0x14]       ; the replaced mov ecx, [esp + 0x10]
     ret
 
+bevel_nodraw:                             ; draw method of the selection panel's bevels: the panel has its own edges
+    ret
+
 labels:
     .long hud_frame, hud_res, hud_icons, mm_frame, mm_create, mm_y_ax, mm_sub_cx, mm_sub_dx, mm_add_eax
     .long mm_pitch, mm_row, mm_preview, mm_dot, mm_index, mm_fog, mm_fog_blit, mm_div_fy200, mm_div_fx200
-    .long mm_btn_scale, mm_btn_blt_a, mm_btn_blt_b, mm_ui_top
+    .long mm_btn_scale, mm_btn_blt_a, mm_btn_blt_b, mm_ui_top, bevel_nodraw
 '''
 
 ks = Ks(KS_ARCH_X86, KS_MODE_32)
 code = bytes(ks.asm('\n'.join(l.split(';')[0] for l in asm.splitlines()), CODE)[0])
-N_LABELS = 22
+N_LABELS = 23
 (hud_frame, hud_res, hud_icons, mm_frame, mm_create, mm_y_ax, mm_sub_cx, mm_sub_dx, mm_add_eax, mm_pitch,
- mm_row, mm_preview, mm_dot, mm_index, mm_fog, mm_fog_blit, mm_div_fy200, mm_div_fx200, mm_btn_scale, mm_btn_blt_a, mm_btn_blt_b, mm_ui_top) = struct.unpack(f'<{N_LABELS}I', code[-4 * N_LABELS:])
+ mm_row, mm_preview, mm_dot, mm_index, mm_fog, mm_fog_blit, mm_div_fy200, mm_div_fx200, mm_btn_scale, mm_btn_blt_a, mm_btn_blt_b, mm_ui_top,
+ bevel_nodraw) = struct.unpack(f'<{N_LABELS}I', code[-4 * N_LABELS:])
 code = code[:-4 * N_LABELS]
 assert CODE + len(code) <= DATA, f'code too large: {len(code)} bytes'
 
@@ -1079,6 +1128,7 @@ init[W_ZEROS - DATA:W_ZEROS - DATA + 10] = '00000'.encode('utf-16le')
 struct.pack_into('<2I2fI2fIf', init, MM_N - DATA, 300, 313, 300.0, 1 / 300, 300, 0.0, 0.0, 200, 160.0)
 struct.pack_into('<2I', init, MM_UITOP - DATA, 0x2c * 300 // 200, 0x24 * 300 // 200 + 4)   # as for 1920x1200
 init[W_BOLT - DATA:W_BOLT - DATA + 2] ='⚡'.encode('utf-16le')
+struct.pack_into('<4I', init, BEVEL_VT - DATA, *BITMAP_WND_VT[:3], bevel_nodraw)
 
 data[off(CODE):off(CODE) + len(code)] = code
 data[off(DATA):off(DATA_END)] = init
@@ -1132,6 +1182,12 @@ for va, old, new in ((0x43fb41, MM_FY, MM_F200Y), (0x43fb4b, MM_FX, MM_F200X)):
     put(va, 'd80d' + struct.pack('<I', old).hex(), b'\xd8\x0d' + struct.pack('<I', new))
 for va, old, new in ((0x43fd56, MM_FY, MM_F200Y), (0x43fd6b, MM_FX, MM_F200X)):
     put(va, 'd835' + struct.pack('<I', old).hex(), b'\xd8\x35' + struct.pack('<I', new))
+
+# the selection panel lies on the minimap's kind of panel (mm_frame): its bevels are not drawn
+expect(0x57fda0, struct.pack('<4I', *BITMAP_WND_VT).hex())
+for va, op in SEL_BEVELS:
+    put(va, op + ('00' if op == 'c745' else '') + 'a0fd5700',
+        bytes.fromhex(op) + (b'\0' if op == 'c745' else b'') + struct.pack('<I', BEVEL_VT))
 
 # fps_counter.py: its text on the band (x W - 280 for the larger font, y 4), without the black box
 fps_mode = bytes.fromhex('6a0255ff1580879c00')    # push 2 (OPAQUE); push ebp; call [SetBkMode]
