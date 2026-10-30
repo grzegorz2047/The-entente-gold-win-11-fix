@@ -20,6 +20,7 @@ default) is over, so it shows ~20 fps. This keeps the logic untouched and only f
   It is wrapped: the unit's position is replaced by prev + (cur - prev) * alpha for the duration of
   the draw and restored right after, so game logic never sees it. prev/cur are the positions seen
   at the last two ticks; alpha = time since tick start / tick length. Jumps over 64 px snap.
+- Animated building parts (0x4326f7) advance their frame only in the tick's own frame.
 Code lives in the raw tail of .reloc (never applied: fixed image base), data in an extension of
 .reloc's virtual size (zero-filled by the loader).
 """
@@ -465,6 +466,25 @@ expect(0x42b4dc, 'e8c07dfdff')                   # call 0x4032a1 (draws the queu
 expect(0x40171c, 'e96fc50f00')                   # thunk: jmp 0x4fdc90 (queue a text)
 patch_branch(b'\xe8', 0x42b4dc, label('text_replay'))
 patch_branch(b'\xe9', 0x40171c, label('text_hook'))
+
+# Animated building parts (saw of the sawmill, horses of the stable...; list [0x8be3b0], drawn at
+# 0x4326c5) advance their frame by their speed each time they are drawn, i.e. once per tick in the
+# original: with the extra frames they ran ~3x too fast. Advance only in the tick's own frame.
+# The .reloc tail is full: the 16 bytes go to the end of build_patched_exe.py's cave in .text.
+expect(0x4326f7, 'd9476cd84604')                 # fld [edi+0x6c] (speed); fadd [esi+4] (frame)
+text = next(s for s in pe.sections if s.Name.startswith(b'.text'))
+t_lo, t_hi = B + text.VirtualAddress, B + text.VirtualAddress + text.SizeOfRawData
+ANIM = (max(va for va in range(t_hi - 0x400, t_hi) if data[off(va)]) + 16) & ~15
+anim = bytes(ks.asm(f'''
+    fld dword ptr [esi + 4]
+    cmp dword ptr [{G_EXTRA:#x}], 0
+    jne anim_keep
+    fadd dword ptr [edi + 0x6c]
+anim_keep:
+    ret''', ANIM)[0])
+assert ANIM + len(anim) <= t_hi and not any(data[off(ANIM):off(ANIM) + len(anim)]), '.text cave full'
+data[off(ANIM):off(ANIM) + len(anim)] = anim
+patch_branch(b'\xe8', 0x4326f7, ANIM, 1)
 
 # .reloc: grow the virtual size for our data and make the section RWX, non-discardable
 hdr = reloc.get_file_offset()
