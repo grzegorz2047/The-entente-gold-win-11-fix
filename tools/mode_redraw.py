@@ -19,8 +19,8 @@ locked z-buffer did (the terrain left the building shapes out). The buildings ar
 a system-memory surface of the screen size instead, which is put onto the back buffer with BltFast
 after the Unlock, before the terrain is drawn: the same way the minimap reaches the screen.
 The game is loaded at its preferred base (no ASLR flag), so its base relocations are never applied:
-the code lives at the end of the relocation table (modern_hud.py uses its start, prefetch.py the
-part before the last 0xbc0 bytes and the 0x800 bytes before the redraw code), and the table is
+the code lives at the end of the relocation table (modern_hud.py uses its start, prefetch.py and
+pacer.py the part before the last 0xbc0 bytes, prefetch.py also the 0x800 bytes before the redraw code), and the table is
 dropped.
 """
 import struct, sys

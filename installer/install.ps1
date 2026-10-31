@@ -70,7 +70,11 @@ $olderReleases = @('d67bb7c604651aaabb1a9c8befbb31cf3393beab1cd53fee8cad90700e27
                    '9a6bb1039f1f731c0dea9d0df849f385fe7f9ecca68fcc313a271bc6ee599f8f',   # v1.3.4
                    '35c754a32f2697550f0185fec9fc3ab55ca03ddf74c8f8431686923549b3f09d',   # v1.3.4 with improvements
                    '3ba9ca29812e55b684ed29259bc09e3cc1c948c50b10f4f7198c8fbff19050ec',   # PR #19 (sound prefetch)
-                   '64a5ca4c9be1fcb01ebd7968ab3da9fe84689ac8e65a1b217c02e37bbf2866e9')   # PR #19 with improvements
+                   '64a5ca4c9be1fcb01ebd7968ab3da9fe84689ac8e65a1b217c02e37bbf2866e9',   # PR #19 with improvements
+                   '964d938844699c4bf0b59846e4e01d7ab40042dcd97f3029d83941471af2e07c',   # PR #21 (building layer)
+                   'e176861f8364c18c1a185d6331b4c3ce56dc94283e88d50677c71fd0a03aa20f',   # PR #21 with improvements
+                   '6571437b6f2a6acaa42939bae0ab61e4389ed60594c15beb3ae5e356d30a31c5',   # PR #22 first build (pacer)
+                   '56669afafeff3b7983b587c19a302feb0a642940afa6ad9ad0d817401a07a266')   # PR #22 first build with improvements
 # switching between the basic fix and the one with improvements also starts from the original
 $olderReleases += @($basic.Header['target-sha256'], $withZoom.Header['target-sha256']) | Where-Object { $_ -ne $header['target-sha256'] }
 $savedOrig = Join-Path $backup $GameExe

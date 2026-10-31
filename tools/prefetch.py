@@ -12,8 +12,8 @@ At its first main loop iteration the game now starts a thread with background pr
 I/O priority) that reads every .les file under Data\\ (283 MB in the Steam version) and then every
 .wav file under media\\ (105 MB; the music plays from .ogg files and is left out) once, so that the
 loads in the game come from memory.
-The code and the 64 KB read buffer live in the old relocation table, between modern_hud.py's area and
-mode_redraw.py's. The buffer is not allocated: a VirtualAlloc of it changed where the game's later
+The code and the 32 KB read buffer live in the old relocation table, between modern_hud.py's area and
+mode_redraw.py's (pacer.py's code is between them). The buffer is not allocated: a VirtualAlloc of it changed where the game's later
 allocations land, and with that the buildings came out black after saving from the in-game menu in
 about half of the tests (the black buildings of mode_redraw.py, which its redraws then did not fix).
 """
@@ -53,9 +53,9 @@ PATH = a + 3 & ~3                                 # the path being walked, "Data
 PATH_MAX = 0x200
 DATA_END = PATH + PATH_MAX
 assert DATA_END <= RELOC_VA + RELOC_SIZE - 0x100
-BLOCK = 0x10000
+BLOCK = 0x8000
 BUF = RELOC_VA + 0x2000                           # the read buffer, after modern_hud.py's area
-assert BUF + BLOCK <= RELOC_VA + RELOC_SIZE - 0xbc0   # mode_redraw.py's building layer follows
+assert BUF + BLOCK <= RELOC_VA + 0xa000              # pacer.py's code follows
 
 def source(thread):
     return f'''
