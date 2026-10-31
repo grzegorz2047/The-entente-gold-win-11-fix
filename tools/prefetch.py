@@ -5,8 +5,12 @@ Applied last, in both variants. usage: python prefetch.py IN.exe OUT.exe
 The game loads the graphics of a unit or building type (Data\\...\\*.les) the first time one is on
 screen, in the main thread. Usually that takes a few ms, but a read from a slow or removable drive can
 stall: one 216 KB read took 0.9 s (Junkers_J1.les, market save, scrolling across the town zoomed out).
+Sound effects (media\\...\\*.wav) are opened and read from their file whenever the sound is not in
+one of the sound channels already (mmioOpenA at 0x41d2c5): one open over a town took 0.95 s, with the
+game on an SD card that had gone idle.
 At its first main loop iteration the game now starts a thread with background priority (low CPU and
-I/O priority) that reads every .les file under Data\\ (283 MB in the Steam version) once, so that the
+I/O priority) that reads every .les file under Data\\ (283 MB in the Steam version) and then every
+.wav file under media\\ (105 MB; the music plays from .ogg files and is left out) once, so that the
 loads in the game come from memory.
 The code and the 64 KB read buffer live in the old relocation table, between modern_hud.py's area and
 mode_redraw.py's. The buffer is not allocated: a VirtualAlloc of it changed where the game's later
@@ -39,7 +43,7 @@ assert CODE >= RELOC_VA + 0x1600                  # modern_hud.py: up to there
 GetModuleHandleA, GetProcAddress = 0x9c88b8, 0x9c8924
 FUNCS = ['CreateThread', 'SetThreadPriority', 'SetThreadInformation', 'FindFirstFileA', 'FindNextFileA',
          'FindClose', 'CreateFileA', 'ReadFile', 'CloseHandle']
-G_ONCE, G_GOT, G_MEMPRIO = DATA, DATA + 8, DATA + 0xc
+G_ONCE, G_EXT, G_GOT, G_MEMPRIO = DATA, DATA + 4, DATA + 8, DATA + 0xc
 P = {name: DATA + 0x10 + 4 * i for i, name in enumerate(FUNCS)}
 STR = DATA + 0x40
 strings, s_at, a = [b'KERNEL32.dll'] + [f.encode() for f in FUNCS], [], STR
@@ -83,7 +87,7 @@ pf_started:
 pf_loop:
     jmp {LOOP_FIRST:#x}
 
-pf_thread:                                ; read Data\\**\\*.les once, with background CPU and I/O priority
+pf_thread:                                ; read Data\\**\\*.les and media\\**\\*.wav once, with background priority
     push 0x10000                          ; THREAD_MODE_BACKGROUND_BEGIN
     push -2                               ; the current thread
     call dword ptr [{P['SetThreadPriority']:#x}]
@@ -96,9 +100,16 @@ pf_thread:                                ; read Data\\**\\*.les once, with back
     push -2
     call eax
 pt_memprio:
+    mov dword ptr [{G_EXT:#x}], 0x73656c2e ; ".les"
     mov dword ptr [{PATH:#x}], 0x61746144 ; "Data\\"
     mov byte ptr [{PATH + 4:#x}], 0x5c
     push 5
+    call walk
+    add esp, 4
+    mov dword ptr [{G_EXT:#x}], 0x7661772e ; ".wav"
+    mov dword ptr [{PATH:#x}], 0x6964656d ; "media\\"
+    mov word ptr [{PATH + 4:#x}], 0x5c61
+    push 6
     call walk
     add esp, 4
     xor eax, eax
@@ -147,7 +158,7 @@ wk_copied:                                ; ecx: length of the path
 wk_file:
     mov eax, dword ptr [ecx + {PATH - 4:#x}]
     or eax, 0x20202000                    ; lower case
-    cmp eax, 0x73656c2e                   ; ".les"
+    cmp eax, dword ptr [{G_EXT:#x}]       ; ".les" or ".wav"
     jne wk_next
     call read_file
 wk_next:
