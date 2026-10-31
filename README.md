@@ -48,7 +48,8 @@ the population with the housing limit (red when it is reached) and the electrici
 The minimap grows with the resolution (300×300 instead of 200×200 in 1920×1200), shows units as larger
 dots, sits on the same kind of panel instead of the wooden frame, and its buttons are scaled with it.
 The selection panel at the bottom left lies on such a panel too, instead of thin bronze lines over the
-map, so its text stays readable on any terrain. Saved games stay compatible with the basic fix and the
+map, so its text stays readable on any terrain. The minimap is put together off screen, which keeps
+the frame rate up over towns with many units. Saved games stay compatible with the basic fix and the
 original game.
 
 ### Uninstall
@@ -167,7 +168,8 @@ mieszkań (na czerwono, gdy limit jest osiągnięty) i bilans prądu jako wskaź
 z rozdzielczością (300×300 zamiast 200×200 w 1920×1200), pokazuje jednostki większymi kropkami, leży
 na takim samym panelu zamiast drewnianej ramki, a jej przyciski są przeskalowane razem z nią. Panel
 zaznaczenia w lewym dolnym rogu też leży na takim panelu, zamiast cienkich brązowych linii na tle mapy,
-więc jego tekst jest czytelny na każdym terenie. Zapisy gry pozostają zgodne z podstawową poprawką
+więc jego tekst jest czytelny na każdym terenie. Minimapa jest składana poza ekranem, co utrzymuje
+liczbę klatek nad miastami z wieloma jednostkami. Zapisy gry pozostają zgodne z podstawową poprawką
 i oryginalną grą.
 
 ### Odinstalowanie
