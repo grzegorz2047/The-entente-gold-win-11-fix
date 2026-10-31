@@ -81,8 +81,8 @@ original `Antanta.exe` – just run `Install.cmd` again.
     switch the screen mode; the map is now redrawn afterwards);
   - no freezes when units or buildings appear on screen for the first time: the game loads their
     graphics only then, and a read from a slow or removable drive could stall it for up to a second.
-    At start a background thread now reads the graphics archives (about 300 MB) into the Windows
-    file cache.
+    At start a background thread now reads the graphics archives (about 300 MB) and the sound
+    effects (about 100 MB) into the Windows file cache.
 - Sharp picture with Windows display scaling (125 %, 150 %, 175 %…).
 - Skips the intro video, which hangs on a black screen on modern Windows.
 
@@ -201,8 +201,8 @@ oryginalny `Antanta.exe` – wystarczy ponownie uruchomić `Install.cmd`.
     zapisu zmieniają tryb ekranu; teraz mapa jest potem rysowana na nowo);
   - brak przycięć, gdy jednostki lub budynki pierwszy raz pojawiają się na ekranie: gra wczytuje
     ich grafikę dopiero wtedy, a odczyt z wolnego lub wymiennego dysku potrafił ją zatrzymać nawet na
-    sekundę. Teraz przy starcie wątek w tle wczytuje archiwa grafiki (około 300 MB) do pamięci
-    podręcznej Windows.
+    sekundę. Teraz przy starcie wątek w tle wczytuje archiwa grafiki (około 300 MB) i efekty dźwiękowe
+    (około 100 MB) do pamięci podręcznej Windows.
 - Ostry obraz przy skalowaniu ekranu w Windows (125 %, 150 %, 175 %…).
 - Pomija film wstępny, który na współczesnym Windows zawiesza się na czarnym ekranie.
 
