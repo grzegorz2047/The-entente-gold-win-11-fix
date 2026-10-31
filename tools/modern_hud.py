@@ -1,6 +1,6 @@
 """Modern HUD for The Entente (improvements): no screen frame, a semi-transparent top bar.
 
-Applied last in the improvements chain (after terrain_strip.py). usage: python modern_hud.py IN.exe OUT.exe
+Applied in the improvements chain after terrain_strip.py (prefetch.py follows). usage: python modern_hud.py IN.exe OUT.exe
 
 - The four map bevels (MapBevelUp/Down/Left/Right.bmp, blitted by 0x4e11c0 every frame) are no longer
   drawn, so the map fills the whole screen. The thermometer (the electricity balance on the right edge)
@@ -90,7 +90,9 @@ FOG_SURFACE, BACK = 0x982c70, 0x5ae258
 MISSION_SLOT, HUD_SCALE = 0x5ae245, 0x595e14     # mode of the mission; W / 1024 per mode (build_patched_exe.py)
 VB = DATA + 0x560                                 # up to 48 vertices of 20 bytes
 BEVEL_VT = VB + 48 * 20                           # vtable of the selection panel's bevels: 0x57fda0 without drawing
-DATA_END = BEVEL_VT + 6 * 4
+G_COMP, G_RET = BEVEL_VT + 6 * 4, BEVEL_VT + 7 * 4   # system memory surface the minimap is composed on
+DATA_END = BEVEL_VT + 8 * 4
+MINIMAP = 0x953704                                # the minimap's terrain picture (system memory, N x N)
 SELECTION = 0x9a6334                              # window of the selection panel (bottom left) or 0
 BITMAP_WND_VT = [0x4013e8, 0x401e01, 0x401fdc, 0x401d8e]   # window showing a bitmap (draw +0xc: 0x4f7f70)
 # the bevels (TBevel, RBevel, LBevel, BBevel.bmp, used only there) of the selection panel's two layouts
@@ -990,15 +992,125 @@ mm_fog_blit:                              ; the fog overlay (200 x 200) stretche
     mov dword ptr [{MM_RECT + 4:#x}], eax
     add eax, dword ptr [{MM_N:#x}]
     mov dword ptr [{MM_RECT + 12:#x}], eax
+    mov eax, dword ptr [{BACK:#x}]
+    mov ecx, dword ptr [{G_COMP:#x}]      ; onto the composed minimap instead, if there is one
+    test ecx, ecx
+    je fb_blt
+    mov eax, ecx
+    xor ecx, ecx
+    mov dword ptr [{MM_RECT:#x}], ecx
+    mov dword ptr [{MM_RECT + 4:#x}], ecx
+    mov ecx, dword ptr [{MM_N:#x}]
+    mov dword ptr [{MM_RECT + 8:#x}], ecx
+    mov dword ptr [{MM_RECT + 12:#x}], ecx
+fb_blt:
     push 0
     push 0x1008000                        ; DDBLT_KEYSRC | DDBLT_WAIT
     push 0
     push dword ptr [{FOG_SURFACE:#x}]
     push {MM_RECT:#x}
-    mov eax, dword ptr [{BACK:#x}]
     push eax
     mov ecx, dword ptr [eax]
     call dword ptr [ecx + 0x14]           ; Blt
+    ret
+
+; The game draws the minimap each frame straight into the back buffer: a BltFast of the terrain picture,
+; then two Locks of the back buffer for the unit dots and the markers. Under dgVoodoo the first write to
+; each page of a locked back buffer waits for the GPU and reads the surface back: over a town with many
+; units that took several ms per frame, more when the terrain was redrawn. The minimap is now composed on
+; a system memory surface and put on the back buffer with one BltFast.
+mm_comp_create:                           ; instead of mov [0x953704], eax (the minimap surface was created)
+    pushfd
+    pushal
+    mov dword ptr [{MINIMAP:#x}], eax
+    mov eax, dword ptr [{G_COMP:#x}]
+    test eax, eax
+    je cc_new
+    mov dword ptr [{G_COMP:#x}], 0
+    push eax
+    mov ecx, dword ptr [eax]
+    call dword ptr [ecx + 8]              ; Release the previous one
+cc_new:
+    push 1                                ; system memory
+    push 0                                ; colour key
+    push dword ptr [{MM_N:#x}]
+    push dword ptr [{MM_N:#x}]
+    call 0x401668                         ; as the game makes the minimap surface
+    add esp, 16
+    mov dword ptr [{G_COMP:#x}], eax
+    popal
+    popfd
+    ret
+
+mm_c_base:                                ; instead of push edx; push eax; call [ecx + 0x1c]: the terrain picture
+    pop dword ptr [{G_RET:#x}]            ; at (edx, [esp]) of the back buffer eax
+    mov ecx, dword ptr [{G_COMP:#x}]
+    test ecx, ecx
+    je cb_go
+    mov eax, ecx                          ; at (0, 0) of the composed minimap
+    xor edx, edx
+    mov dword ptr [esp], edx
+cb_go:
+    push edx
+    push eax
+    mov ecx, dword ptr [eax]
+    call dword ptr [ecx + 0x1c]           ; BltFast
+    jmp dword ptr [{G_RET:#x}]
+
+mm_c_lock_edx:                            ; instead of push edx; push eax; call [ecx + 0x64]
+    mov ecx, edx
+mm_c_lock:                                ; instead of push ecx; push eax; call [edx + 0x64]: Lock of rect ecx
+    pop dword ptr [{G_RET:#x}]            ; of the back buffer eax
+    mov edx, dword ptr [{G_COMP:#x}]
+    test edx, edx
+    je cl_go
+    mov eax, edx                          ; the whole composed minimap: the same offsets from lpSurface
+    xor ecx, ecx
+cl_go:
+    push ecx
+    push eax
+    mov ecx, dword ptr [eax]
+    call dword ptr [ecx + 0x64]
+    jmp dword ptr [{G_RET:#x}]
+
+mm_c_unlock_edx:                          ; instead of push edx; push eax; mov ecx, [eax]; call [ecx + 0x80]
+    mov ecx, edx
+mm_c_unlock:                              ; instead of push ecx; push eax; mov edx, [eax]; call [edx + 0x80]
+    mov edx, dword ptr [{G_COMP:#x}]
+    test edx, edx
+    je cu_go
+    mov eax, edx
+    xor ecx, ecx
+cu_go:
+    push ecx
+    push eax
+    mov edx, dword ptr [eax]
+    call dword ptr [edx + 0x80]           ; Unlock
+    ret
+
+mm_c_unlock_show_edx:                     ; the last Unlock of the minimap (or the one after a failed Lock):
+    mov ecx, edx                          ; then the composed minimap goes on the back buffer
+mm_c_unlock_show:
+    call mm_c_unlock
+    push eax
+    mov eax, dword ptr [{G_COMP:#x}]
+    test eax, eax
+    je cs_done
+    cmp dword ptr [{MINIMAP:#x}], 0
+    je cs_done
+    push 0x10                             ; DDBLTFAST_WAIT
+    push 0
+    push eax
+    movzx eax, word ptr [{MM_Y:#x}]
+    push eax
+    movzx eax, word ptr [{MM_X:#x}]
+    push eax
+    mov eax, dword ptr [{BACK:#x}]
+    push eax
+    mov ecx, dword ptr [eax]
+    call dword ptr [ecx + 0x1c]           ; BltFast
+cs_done:
+    pop eax
     ret
 
 mm_div_fy200:                             ; st0 / (fy * N / 200) = map y * 200 / map size: row on the 200 x 200
@@ -1104,14 +1216,16 @@ labels:
     .long hud_frame, hud_res, hud_icons, mm_frame, mm_create, mm_y_ax, mm_sub_cx, mm_sub_dx, mm_add_eax
     .long mm_pitch, mm_row, mm_preview, mm_dot, mm_index, mm_fog, mm_fog_blit, mm_div_fy200, mm_div_fx200
     .long mm_btn_scale, mm_btn_blt_a, mm_btn_blt_b, mm_ui_top, bevel_nodraw
+    .long mm_comp_create, mm_c_base, mm_c_lock_edx, mm_c_lock, mm_c_unlock, mm_c_unlock_show_edx, mm_c_unlock_show
 '''
 
 ks = Ks(KS_ARCH_X86, KS_MODE_32)
 code = bytes(ks.asm('\n'.join(l.split(';')[0] for l in asm.splitlines()), CODE)[0])
-N_LABELS = 23
+N_LABELS = 30
 (hud_frame, hud_res, hud_icons, mm_frame, mm_create, mm_y_ax, mm_sub_cx, mm_sub_dx, mm_add_eax, mm_pitch,
  mm_row, mm_preview, mm_dot, mm_index, mm_fog, mm_fog_blit, mm_div_fy200, mm_div_fx200, mm_btn_scale, mm_btn_blt_a, mm_btn_blt_b, mm_ui_top,
- bevel_nodraw) = struct.unpack(f'<{N_LABELS}I', code[-4 * N_LABELS:])
+ bevel_nodraw, mm_comp_create, mm_c_base, mm_c_lock_edx, mm_c_lock, mm_c_unlock, mm_c_unlock_show_edx,
+ mm_c_unlock_show) = struct.unpack(f'<{N_LABELS}I', code[-4 * N_LABELS:])
 code = code[:-4 * N_LABELS]
 assert CODE + len(code) <= DATA, f'code too large: {len(code)} bytes'
 
@@ -1183,6 +1297,14 @@ for va, old, new in ((0x43fb41, MM_FY, MM_F200Y), (0x43fb4b, MM_FX, MM_F200X)):
 for va, old, new in ((0x43fd56, MM_FY, MM_F200Y), (0x43fd6b, MM_FX, MM_F200X)):
     put(va, 'd835' + struct.pack('<I', old).hex(), b'\xd8\x35' + struct.pack('<I', new))
 
+# the minimap is composed on a system memory surface (see mm_comp_create)
+put(0x43dffa, 'a304379500', call(0x43dffa, mm_comp_create))
+put(0x43e950, '5250ff511c', call(0x43e950, mm_c_base))
+put(0x43ea11, '5250ff5164', call(0x43ea11, mm_c_lock_edx))
+put(0x43ebcc, '5150ff5264', call(0x43ebcc, mm_c_lock))
+put(0x43ea35, '52508b08ff9180000000', call(0x43ea35, mm_c_unlock_show_edx))
+put(0x43eb6f, '51508b10ff9280000000', call(0x43eb6f, mm_c_unlock))
+put(0x43f00d, '51508b10ff9280000000', call(0x43f00d, mm_c_unlock_show))
 # the selection panel lies on the minimap's kind of panel (mm_frame): its bevels are not drawn
 expect(0x57fda0, struct.pack('<4I', *BITMAP_WND_VT).hex())
 for va, op in SEL_BEVELS:
