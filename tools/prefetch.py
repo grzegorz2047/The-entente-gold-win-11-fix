@@ -55,7 +55,7 @@ DATA_END = PATH + PATH_MAX
 assert DATA_END <= RELOC_VA + RELOC_SIZE - 0x100
 BLOCK = 0x10000
 BUF = RELOC_VA + 0x2000                           # the read buffer, after modern_hud.py's area
-assert BUF + BLOCK <= CODE
+assert BUF + BLOCK <= RELOC_VA + RELOC_SIZE - 0xbc0   # mode_redraw.py's building layer follows
 
 def source(thread):
     return f'''
