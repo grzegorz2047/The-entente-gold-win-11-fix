@@ -59,7 +59,7 @@ RENDER = 0x42b1d0
 DDRAW, ZBUFFER, MODE = 0x5ae250, 0x5ae1e8, 0x5ae24c
 G_EXTRA, G_SKIP, G_NOLOGIC = 0x9e4038, 0x9e4048, 0x9e4060     # smooth60.py's flags
 RELOC_VA, RELOC_SIZE = 0x9cb000, 0x12bc0
-CODE, CODE_END = RELOC_VA + 0xa000, RELOC_VA + RELOC_SIZE - 0xbc0
+CODE, CODE_END = RELOC_VA + 0xa000, RELOC_VA + 0xb000   # visibility.py follows
 reloc = next(s for s in pe.sections if s.Name.startswith(b'.reloc'))
 assert B + reloc.VirtualAddress == RELOC_VA and pe.sections[-1] is reloc
 V = (RELOC_VA + reloc.Misc_VirtualSize + 0xfff) & ~0xfff        # zero-filled data

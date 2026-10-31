@@ -74,6 +74,8 @@ original `Antanta.exe` – just run `Install.cmd` again.
     "game speed" milliseconds), and in the time the game used to sleep it shows extra frames with
     units drawn between their positions; the frames come at even 1/60 s intervals instead of in
     bursts;
+  - the fog of war is worked out by the CPU; the game had it drawn by the graphics card and read it
+    back, which stopped the game for about 12 ms once a second;
   - button tooltips (e.g. building costs) no longer flicker in those extra frames;
   - HUD text is drawn on a separate layer, which keeps the frame rate steady;
   - an FPS counter in the top-right corner ("FPS 60  max 33 ms": frames per second and the
@@ -107,8 +109,9 @@ python tools/fps_counter.py overlay.exe counter.exe
 python tools/mode_redraw.py counter.exe redraw.exe
 python tools/terrain_strip.py redraw.exe strip.exe
 python tools/prefetch.py strip.exe pre.exe
-python tools/pacer.py pre.exe out.exe
-python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch "tools/build_patched_exe.py + smooth60.py + text_overlay.py + fps_counter.py + mode_redraw.py + terrain_strip.py + prefetch.py + pacer.py"
+python tools/pacer.py pre.exe pace.exe
+python tools/visibility.py pace.exe out.exe
+python tools/make_diff.py Antanta.exe out.exe installer/antanta.patch "tools/build_patched_exe.py + smooth60.py + text_overlay.py + fps_counter.py + mode_redraw.py + terrain_strip.py + prefetch.py + pacer.py + visibility.py"
 
 python tools/build_patched_exe.py Antanta.exe base2.exe 1024x768 1152x720 1280x800 1920x1200
 python tools/smooth60.py base2.exe smooth2.exe
@@ -119,8 +122,9 @@ python tools/zoom.py redraw2.exe zoom.exe
 python tools/terrain_strip.py zoom.exe zoom2.exe
 python tools/modern_hud.py zoom2.exe hud.exe
 python tools/prefetch.py hud.exe pre2.exe
-python tools/pacer.py pre2.exe out2.exe
-python tools/make_diff.py Antanta.exe out2.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + mode_redraw.py + zoom.py + terrain_strip.py + modern_hud.py + prefetch.py + pacer.py"
+python tools/pacer.py pre2.exe pace2.exe
+python tools/visibility.py pace2.exe out2.exe
+python tools/make_diff.py Antanta.exe out2.exe installer/antanta-improvements.patch "tools/build_patched_exe.py (1920x1200) + smooth60.py + text_overlay.py + fps_counter.py + mode_redraw.py + zoom.py + terrain_strip.py + modern_hud.py + prefetch.py + pacer.py + visibility.py"
 ```
 
 ---
@@ -198,6 +202,8 @@ oryginalny `Antanta.exe` – wystarczy ponownie uruchomić `Install.cmd`.
     (jeden krok co „prędkość gry” milisekund), a w czasie, w którym gra dotąd czekała, pokazuje
     dodatkowe klatki z jednostkami narysowanymi między ich pozycjami; klatki pojawiają się w równych
     odstępach co 1/60 s zamiast seriami;
+  - mgłę wojny liczy procesor; gra rysowała ją kartą graficzną i odczytywała z powrotem, co mniej
+    więcej raz na sekundę zatrzymywało grę na około 12 ms;
   - opisy przycisków (np. koszt budowy) nie migają w tych dodatkowych klatkach;
   - teksty interfejsu są rysowane na osobnej warstwie, co stabilizuje liczbę klatek;
   - licznik klatek w prawym górnym rogu („FPS 60  max 33 ms”: klatki na sekundę i najdłuższa
