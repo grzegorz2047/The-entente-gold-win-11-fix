@@ -78,7 +78,8 @@ original `Antanta.exe` – just run `Install.cmd` again.
   - an FPS counter in the top-right corner ("FPS 60  max 33 ms": frames per second and the
     longest frame of the last second);
   - buildings no longer turn black after saving or loading from the in-game menu (the dialogs
-    switch the screen mode; the map is now redrawn afterwards);
+    switch the screen mode; the buildings are now put onto the screen through a separate layer
+    and the map is redrawn afterwards);
   - no freezes when units or buildings appear on screen for the first time: the game loads their
     graphics only then, and a read from a slow or removable drive could stall it for up to a second.
     At start a background thread now reads the graphics archives (about 300 MB) and the sound
@@ -198,7 +199,8 @@ oryginalny `Antanta.exe` – wystarczy ponownie uruchomić `Install.cmd`.
   - licznik klatek w prawym górnym rogu („FPS 60  max 33 ms”: klatki na sekundę i najdłuższa
     klatka z ostatniej sekundy);
   - budynki nie robią się czarne po zapisaniu lub wczytaniu gry z menu w trakcie gry (okna
-    zapisu zmieniają tryb ekranu; teraz mapa jest potem rysowana na nowo);
+    zapisu zmieniają tryb ekranu; teraz budynki trafiają na ekran przez osobną warstwę, a mapa
+    jest potem rysowana na nowo);
   - brak przycięć, gdy jednostki lub budynki pierwszy raz pojawiają się na ekranie: gra wczytuje
     ich grafikę dopiero wtedy, a odczyt z wolnego lub wymiennego dysku potrafił ją zatrzymać nawet na
     sekundę. Teraz przy starcie wątek w tle wczytuje archiwa grafiki (około 300 MB) i efekty dźwiękowe
