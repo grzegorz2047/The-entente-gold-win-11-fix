@@ -10,8 +10,17 @@ the camera moved.
 The render call of the main loop (0x46e1df) now notices a new back buffer (a mode switch creates
 one) and redraws the map 5, 60 and 180 map frames later the way the game does for a camera jump
 (scroll flag 10, 0x431c70(0, 0)): right after the switch the buildings still come out black.
+That did not cover every case: in about one save in four the buildings stayed black, or showed
+pieces of an old picture, even after those redraws. The redraw copies the building pixels with the
+CPU into the locked back buffer (0x42ed90 and others, between the Lock at 0x437e76 and the Unlock at
+0x438bec) and then draws the terrain around them with Direct3D. After such a mode switch, what was
+written into the locked back buffer did not reach the picture, while the depth written into the
+locked z-buffer did (the terrain left the building shapes out). The buildings are now written into
+a system-memory surface of the screen size instead, which is put onto the back buffer with BltFast
+after the Unlock, before the terrain is drawn: the same way the minimap reaches the screen.
 The game is loaded at its preferred base (no ASLR flag), so its base relocations are never applied:
-the code lives at the end of the relocation table (modern_hud.py uses its start), and the table is
+the code lives at the end of the relocation table (modern_hud.py uses its start, prefetch.py the
+part before the last 0xbc0 bytes and the 0x800 bytes before the redraw code), and the table is
 dropped.
 """
 import struct, sys
@@ -74,7 +83,87 @@ code = bytes(Ks(KS_ARCH_X86, KS_MODE_32).asm('\n'.join(l.split(';')[0] for l in 
 assert CODE + len(code) <= G_BACK
 data[off(CODE):off(CODE) + 0x100] = code + bytes(0x100 - len(code))
 data[off(0x46e1df):off(0x46e1df) + 5] = call(0x46e1df, CODE)
-dd = pe.OPTIONAL_HEADER.get_file_offset() + 96 + 8 * 5   # the base relocation directory: none
+
+BACK, DEVICE = 0x5ae258, 0x5ae1f0
+LOCK_AT, UNLOCK_AT, SCENE_AT = 0x437e53, 0x438be2, 0x438bf4
+expect(LOCK_AT, 'a158e25a00')                      # mov eax, [back]: Lock(back, NULL, [esp+0x1e4], WAIT) follows
+expect(UNLOCK_AT, 'a158e25a006a0050')               # mov eax, [back]; push 0; push eax: its Unlock
+expect(SCENE_AT, 'a1f0e15a00')                     # mov eax, [device]: BeginScene follows
+LAYER = RELOC_VA + RELOC_SIZE - 0xbc0              # up to prefetch.py's code
+G_SURF, G_FOR, G_USED = LAYER + 0x2b0, LAYER + 0x2b4, LAYER + 0x2b8
+CREATE = 0x401668                                 # (w, h, colour key, system memory): a surface, as for the minimap
+asm = f'''
+bl_lock:                                  ; instead of mov eax, [back] before the Lock: the surface to write into
+    mov eax, dword ptr [{BACK:#x}]
+    cmp eax, dword ptr [{G_FOR:#x}]
+    je bl_have
+    pushal                                ; a new back buffer (start, mode switch): a new surface of its size
+    mov dword ptr [{G_FOR:#x}], eax
+    mov eax, dword ptr [{G_SURF:#x}]
+    test eax, eax
+    je bl_new
+    mov dword ptr [{G_SURF:#x}], 0
+    push eax
+    mov ecx, dword ptr [eax]
+    call dword ptr [ecx + 8]              ; Release
+bl_new:
+    push 1
+    push 0
+    movzx eax, word ptr [0x5ae24c]        ; height
+    push eax
+    movzx eax, word ptr [0x5ae24e]        ; width
+    push eax
+    call {CREATE:#x}
+    add esp, 16
+    mov dword ptr [{G_SURF:#x}], eax
+    popal
+bl_have:
+    mov eax, dword ptr [{G_SURF:#x}]
+    test eax, eax
+    jne bl_used
+    mov eax, dword ptr [{BACK:#x}]        ; no surface: the back buffer, as before
+    ret
+bl_used:
+    mov byte ptr [{G_USED:#x}], 1
+    ret
+
+bl_unlock:                                ; instead of mov eax, [back] before the Unlock
+    mov eax, dword ptr [{BACK:#x}]
+    cmp byte ptr [{G_USED:#x}], 0
+    je bu_ret
+    mov eax, dword ptr [{G_SURF:#x}]
+bu_ret:
+    ret
+
+bl_show:                                  ; instead of mov eax, [device] before BeginScene: the buildings onto
+    cmp byte ptr [{G_USED:#x}], 0         ; the back buffer, the terrain is drawn around them
+    je bs_done
+    mov byte ptr [{G_USED:#x}], 0
+    pushal
+    push 0x10                             ; DDBLTFAST_WAIT
+    push 0                                ; the whole surface
+    push dword ptr [{G_SURF:#x}]
+    push 0
+    push 0
+    mov eax, dword ptr [{BACK:#x}]
+    push eax
+    mov ecx, dword ptr [eax]
+    call dword ptr [ecx + 0x1c]           ; BltFast
+    popal
+bs_done:
+    mov eax, dword ptr [{DEVICE:#x}]
+    ret
+labels:
+    .long bl_lock, bl_unlock, bl_show
+'''
+code = bytes(Ks(KS_ARCH_X86, KS_MODE_32).asm('\n'.join(l.split(';')[0] for l in asm.splitlines()), LAYER)[0])
+entries = struct.unpack('<3I', code[-12:])
+code = code[:-12]
+assert LAYER + len(code) <= G_SURF
+data[off(LAYER):off(LAYER) + 0x2c0] = code + bytes(0x2c0 - len(code))
+for at, to in zip((LOCK_AT, UNLOCK_AT, SCENE_AT), entries):
+    data[off(at):off(at) + 5] = call(at, to)
+dd =pe.OPTIONAL_HEADER.get_file_offset() + 96 + 8 * 5   # the base relocation directory: none
 struct.pack_into('<2I', data, dd, 0, 0)
 open(dst, 'wb').write(data)
-print(f'code {len(code)} bytes at {CODE:#x}')
+print(f'code at {CODE:#x}, building layer {len(code)} bytes at {LAYER:#x}')
